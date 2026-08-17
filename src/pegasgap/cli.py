@@ -203,6 +203,32 @@ def sweep(
 
 
 @app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="Слушать на этом адресе"),
+    port: int = typer.Option(8000, "--port", "-p"),
+    config: Path = typer.Option(DEFAULT_CONFIG, "--config", help="Файл матрицы для обхода"),
+    db: Path = typer.Option(storage.DEFAULT_DB, "--db"),
+    reload: bool = typer.Option(False, "--reload", help="Автоперезапуск при правках кода"),
+) -> None:
+    """Поднять веб-интерфейс (дашборд на http://host:port/)."""
+    configure_logging(logging.INFO)
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise typer.BadParameter(
+            "не установлены веб-зависимости: pip install -e \".[web]\"") from exc
+    from pegasgap.web import create_app
+
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if not dist.is_dir():
+        console.print("[yellow]Фронтенд не собран — интерфейс будет недоступен.[/yellow]")
+        console.print("[yellow]Соберите: cd frontend && npm install && npm run build[/yellow]")
+    console.print(f"[bold]Дашборд:[/bold] http://{host}:{port}/")
+    uvicorn.run(create_app(db_path=db, config_path=config), host=host, port=port,
+                reload=reload, log_level="info")
+
+
+@app.command()
 def report(
     days: int = typer.Option(7, "--days", "-d", help="За сколько последних дней"),
     standing: int = typer.Option(3, "--standing", help="Со скольких повторов находка "

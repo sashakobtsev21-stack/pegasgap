@@ -1,0 +1,356 @@
+"""Веб-интерфейс: FastAPI + собранный React-дашборд под `/app`.
+
+Авторизации нет намеренно. Инструмент внутренний, поднимается локально или на служебной
+машине, и данные в нём — публичная выдача двух витрин. Экран входа тут защищал бы не от
+кого, но добавлял бы состояние, сессии и права, которые надо поддерживать. Если однажды
+понадобится вынести дашборд наружу — авторизация станет отдельной задачей со своей
+моделью угроз, а не декорацией, добавленной заранее.
+
+Прогон одного направления занимает секунды, поэтому `POST /api/scan` синхронный: живой
+поток событий (SSE) здесь стоил бы дороже, чем даёт. Обход матрицы — минуты, и он
+наоборот фоновый: держать его на открытой вкладке значит терять ночной обход при
+закрытии браузера.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from pegasgap import storage
+from pegasgap.catalog import fetch_catalog, resolve_country_id
+from pegasgap.diagnosis import diagnose
+from pegasgap.gaps import detect
+from pegasgap.linking import load_links
+from pegasgap.models import (
+    PEGAS,
+    GapKind,
+    HotelDiagnosis,
+    ScanResult,
+    SearchParams,
+)
+from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
+from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
+
+log = logging.getLogger("pegasgap.web")
+
+# Запасные справочники на случай, если шлюз не ответил: форма должна остаться рабочей.
+_FALLBACK_COUNTRIES = ["Турция", "Египет", "ОАЭ", "Таиланд", "Вьетнам", "Мальдивы"]
+_FALLBACK_CITIES = ["Москва", "Санкт-Петербург", "Екатеринбург", "Казань", "Новосибирск"]
+
+
+class ScanRequest(BaseModel):
+    country: str
+    departure: str = "Москва"
+    date_from: date
+    date_to: date
+    nights: int = Field(default=7, ge=1, le=30)
+    adults: int = Field(default=2, ge=1, le=6)
+    mode: str = "tours"
+
+    def to_params(self, operator: str) -> SearchParams:
+        if self.mode not in ("tours", "hotels"):
+            raise HTTPException(400, "режим должен быть tours или hotels")
+        try:
+            return SearchParams(
+                departure_city=self.departure, destination_country=self.country,
+                date_from=self.date_from, date_to=self.date_to,
+                nights_min=self.nights, nights_max=self.nights,
+                adults=self.adults, search_mode=self.mode,  # type: ignore[arg-type]
+                operators=[operator],
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
+class SweepState:
+    """Состояние фонового обхода. Одно на процесс — параллельные обходы не нужны.
+
+    Второй обход поверх идущего удвоил бы нагрузку на обе площадки и перемешал результаты
+    в одной ленте, поэтому запуск при активном обходе отклоняется, а не ставится в очередь.
+    """
+
+    def __init__(self) -> None:
+        self.running = False
+        self.total = 0
+        self.done = 0
+        self.started_at: datetime | None = None
+        self.finished_at: datetime | None = None
+        self.results: list[dict] = []
+        self.error: str | None = None
+        # Ссылку на фоновую задачу держим обязательно: asyncio хранит только слабую, и
+        # без сильной ссылки сборщик мусора вправе прибить обход на середине.
+        self.task: asyncio.Task | None = None
+
+    def as_dict(self) -> dict:
+        return {
+            "running": self.running,
+            "total": self.total,
+            "done": self.done,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "results": self.results,
+            "error": self.error,
+        }
+
+
+async def _diagnose(scan: ScanResult) -> None:
+    """Разобрать причины отельных пропусков. Недоступность справочников не фатальна."""
+    if not scan.gaps_of(GapKind.HOTEL):
+        return
+    country_id = await resolve_country_id(scan.params.destination_country)
+    catalog = await fetch_catalog(country_id) if country_id else []
+    links = await asyncio.to_thread(load_links)
+    diagnose(scan, catalog, links)
+
+
+async def run_scan(params: SearchParams, operator: str, db_path: Path,
+                   headless: bool = True) -> tuple[int, ScanResult]:
+    """Прогнать одно направление, разобрать причины и сохранить. Возвращает (id, итог)."""
+    results = await run_pair(params, headless=headless)
+    scan = detect(params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
+    await _diagnose(scan)
+    with storage.session(db_path) as conn:
+        run_id = storage.save_scan(conn, scan)
+    return run_id, scan
+
+
+def _gap_dict(row: Any) -> dict:
+    kind = GapKind(row["kind"])
+    diagnosis = HotelDiagnosis(row["diagnosis"] or "unknown")
+    reference = float(row["reference_price"]) if row["reference_price"] is not None else None
+    checked = float(row["checked_price"]) if row["checked_price"] is not None else None
+    diff = None
+    if reference and checked is not None:
+        diff = (checked - reference) / reference * 100
+    return {
+        "kind": kind.value,
+        "kind_title": kind.title,
+        "hotel_name": row["hotel_name"],
+        "stars": row["stars"],
+        "resort": row["resort"],
+        "reference_price": reference,
+        "checked_price": checked,
+        "diff_pct": diff,
+        "note": row["note"],
+        # Вердикт «не проверялось» на экран не выносим: пустая колонка честнее подписи,
+        # которая выглядит как результат разбора.
+        "diagnosis": diagnosis.value if diagnosis is not HotelDiagnosis.UNKNOWN else None,
+        "diagnosis_title": diagnosis.title if diagnosis is not HotelDiagnosis.UNKNOWN else None,
+        "catalog_id": row["catalog_id"],
+        "catalog_name": row["catalog_name"],
+    }
+
+
+def _run_dict(run: Any, gaps: list[Any]) -> dict:
+    params = json.loads(run["params_json"])
+    diagnoses: dict[str, int] = {}
+    for g in gaps:
+        if g["kind"] == GapKind.HOTEL.value and g["diagnosis"] != HotelDiagnosis.UNKNOWN.value:
+            diagnoses[g["diagnosis"]] = diagnoses.get(g["diagnosis"], 0) + 1
+    return {
+        "run_id": run["id"],
+        "run_at": run["run_at"],
+        "operator": run["operator"],
+        "params": params,
+        "reference_status": run["reference_status"],
+        "checked_status": run["checked_status"],
+        "reference_hotels": run["reference_hotels"],
+        "matched_hotels": run["matched_hotels"],
+        "price_offset_pct": run["price_offset_pct"],
+        "trustworthy": bool(run["trustworthy"]),
+        "problems": json.loads(run["problems"]),
+        "notes": json.loads(run["notes"] or "[]"),
+        "unmatched": json.loads(run["unmatched"]),
+        "gaps": [_gap_dict(g) for g in gaps],
+        # Что делать — сводкой на прогон, а не повтором в каждой строке таблицы.
+        "actions": [
+            {"title": HotelDiagnosis(k).title, "count": n, "action": HotelDiagnosis(k).action}
+            for k, n in sorted(diagnoses.items(), key=lambda kv: -kv[1])
+        ],
+    }
+
+
+def create_app(db_path: str | Path = storage.DEFAULT_DB,
+               config_path: str | Path = DEFAULT_CONFIG,
+               operator: str = PEGAS) -> FastAPI:
+    app = FastAPI(title="Pegas Gap", docs_url="/api/docs", redoc_url=None)
+    db_path = Path(db_path)
+    sweep = SweepState()
+
+    @app.get("/healthz")
+    async def healthz() -> dict:
+        return {"ok": True}
+
+    @app.get("/api/refdata")
+    async def refdata() -> dict:
+        """Списки для формы. Тянем из шлюза, при неудаче — запасные значения."""
+        countries, cities = _FALLBACK_COUNTRIES, _FALLBACK_CITIES
+        try:
+            import httpx
+
+            from pegasgap.providers.sletat_api import BASE_URL, REFERER
+            async with httpx.AsyncClient(timeout=30, headers={"Referer": REFERER}) as client:
+                cr = await client.get(f"{BASE_URL}/GetCountries")
+                dr = await client.get(f"{BASE_URL}/GetDepartCities")
+                cs = ((cr.json().get("GetCountriesResult") or {}).get("Data")) or []
+                ds = ((dr.json().get("GetDepartCitiesResult") or {}).get("Data")) or []
+                if cs:
+                    countries = sorted({str(x["Name"]).strip() for x in cs if x.get("Name")})
+                if ds:
+                    cities = sorted({str(x["Name"]).strip() for x in ds if x.get("Name")})
+        except Exception as exc:
+            log.warning("справочники недоступны (%s) — отдаю запасные", type(exc).__name__)
+        return {"countries": countries, "departure_cities": cities, "operator": operator}
+
+    @app.post("/api/scan")
+    async def scan(req: ScanRequest) -> dict:
+        params = req.to_params(operator)
+        run_id, result = await run_scan(params, operator, db_path)
+        return {"run_id": run_id, "gaps": len(result.gaps), "trustworthy": result.trustworthy}
+
+    @app.get("/api/runs/{run_id}")
+    async def get_run(run_id: int) -> dict:
+        with storage.session(db_path) as conn:
+            run = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+            if run is None:
+                raise HTTPException(404, f"прогон #{run_id} не найден")
+            gaps = storage.gaps_of_run(conn, run_id)
+            return _run_dict(run, gaps)
+
+    @app.get("/api/history")
+    async def history(days: int = 7, standing: int = 3) -> dict:
+        since = datetime.now() - timedelta(days=max(1, days))
+        with storage.session(db_path) as conn:
+            counts = storage.summary_since(conn, since)
+            runs = storage.runs_since(conn, since)
+            gap_counts = {
+                r["run_id"]: r["n"] for r in conn.execute(
+                    "SELECT run_id, COUNT(*) AS n FROM gaps GROUP BY run_id")
+            }
+            old = storage.standing_gaps(conn, standing)
+            return {
+                "days": days,
+                "trustworthy_runs": sum(1 for r in runs if r["trustworthy"]),
+                "summary": [
+                    {"kind": k.value, "title": k.title, "hint": k.hint,
+                     "count": counts.get(k.value, 0)}
+                    for k in GapKind
+                ],
+                "runs": [
+                    {
+                        "run_id": r["id"], "run_at": r["run_at"],
+                        "departure_city": r["departure_city"],
+                        "destination_country": r["destination_country"],
+                        "date_from": r["date_from"], "date_to": r["date_to"],
+                        "search_mode": r["search_mode"],
+                        "trustworthy": bool(r["trustworthy"]),
+                        "gaps": gap_counts.get(r["id"], 0),
+                    }
+                    for r in runs
+                ],
+                "standing": [
+                    {"scenario_key": s["scenario_key"], "gap_key": s["gap_key"],
+                     "first_seen": s["first_seen"], "times_seen": s["times_seen"]}
+                    for s in old[:50]
+                ],
+            }
+
+    @app.get("/api/sweep/matrix")
+    async def sweep_matrix() -> dict:
+        try:
+            matrix = load_matrix(config_path)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {
+            "operator": matrix.operator,
+            "countries": matrix.countries,
+            "departure_cities": matrix.departure_cities,
+            "modes": matrix.modes,
+            "total": len(matrix.build(date.today())),
+        }
+
+    @app.get("/api/sweep")
+    async def sweep_status() -> dict:
+        return sweep.as_dict()
+
+    @app.post("/api/sweep")
+    async def sweep_start() -> dict:
+        if sweep.running:
+            raise HTTPException(409, "обход уже идёт")
+        try:
+            matrix = load_matrix(config_path)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        items = matrix.build(date.today())
+
+        sweep.running = True
+        sweep.total = len(items)
+        sweep.done = 0
+        sweep.results = []
+        sweep.error = None
+        sweep.started_at = datetime.now()
+        sweep.finished_at = None
+
+        async def worker() -> None:
+            # Ограничение параллельности: каждый сценарий — это два поиска, а в режиме
+            # «Отели» ещё и браузер. Без предела десяток сценариев съест память машины.
+            sem = asyncio.Semaphore(4)
+
+            async def one(p: SearchParams) -> None:
+                try:
+                    async with sem:
+                        run_id, res = await run_scan(p, matrix.operator, db_path)
+                    sweep.results.append({
+                        "run_id": run_id, "country": p.destination_country,
+                        "departure_city": p.departure_city, "mode": p.search_mode,
+                        "gaps": len(res.gaps), "trustworthy": res.trustworthy,
+                    })
+                except Exception as exc:
+                    log.warning("сценарий %s упал: %s", p.scenario_key(), exc)
+                    sweep.results.append({
+                        "run_id": None, "country": p.destination_country,
+                        "departure_city": p.departure_city, "mode": p.search_mode,
+                        "gaps": 0, "trustworthy": False, "error": str(exc),
+                    })
+                finally:
+                    sweep.done += 1
+
+            try:
+                await asyncio.gather(*(one(p) for p in items))
+            except Exception as exc:
+                sweep.error = str(exc)
+            finally:
+                sweep.running = False
+                sweep.finished_at = datetime.now()
+
+        sweep.task = asyncio.create_task(worker())
+        return {"started": True, "total": sweep.total}
+
+    # Собранный дашборд. Раздаём под /app, корень редиректит туда — чтобы у пользователя
+    # был один адрес, который «просто открывается».
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if dist.is_dir():
+        app.mount("/app", StaticFiles(directory=str(dist), html=True), name="dashboard")
+
+        @app.get("/")
+        async def root() -> RedirectResponse:
+            return RedirectResponse("/app/")
+    else:
+        @app.get("/")
+        async def root_missing() -> JSONResponse:
+            return JSONResponse(
+                {"error": "Фронтенд не собран. Выполните: cd frontend && npm install && npm run build"},
+                status_code=503,
+            )
+
+    return app

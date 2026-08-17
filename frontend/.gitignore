@@ -1,0 +1,10 @@
+# Зависимости и сборка фронтенда
+node_modules/
+dist/
+dist-ssr/
+
+# Логи и локальные настройки
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

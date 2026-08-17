@@ -13,3 +13,7 @@ build/
 screenshots/
 reports/
 .env
+
+# Собранный фронт — артефакт сборки
+frontend/dist/
+frontend/node_modules/

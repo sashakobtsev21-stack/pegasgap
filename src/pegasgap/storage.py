@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS runs (
     price_offset_pct    REAL,
     trustworthy         INTEGER NOT NULL,
     problems            TEXT    NOT NULL DEFAULT '[]',
+    notes               TEXT    NOT NULL DEFAULT '[]',
     unmatched           TEXT    NOT NULL DEFAULT '[]',
     params_json         TEXT    NOT NULL
 );
@@ -84,6 +85,9 @@ CREATE INDEX IF NOT EXISTS idx_gaps_kind     ON gaps(kind);
 # созданные раньше, о них не знают — SQLite не умеет «добавить, если нет», поэтому
 # сверяемся с PRAGMA. Без этого обновление кода роняло бы накопленную историю.
 _MIGRATIONS = {
+    "runs": {
+        "notes": "TEXT NOT NULL DEFAULT '[]'",
+    },
     "gaps": {
         "diagnosis": "TEXT NOT NULL DEFAULT 'unknown'",
         "catalog_id": "INTEGER",
@@ -133,8 +137,8 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                    run_at, scenario_key, operator, search_mode, departure_city,
                    destination_country, date_from, date_to, reference_status,
                    checked_status, reference_hotels, matched_hotels, price_offset_pct,
-                   trustworthy, problems, unmatched, params_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   trustworthy, problems, notes, unmatched, params_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 scan.run_at.isoformat(timespec="seconds"),
                 p.scenario_key(), scan.operator, p.search_mode, p.departure_city,
@@ -143,6 +147,7 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                 scan.reference_hotels, scan.matched_hotels, scan.price_offset_pct,
                 int(scan.trustworthy),
                 json.dumps(scan.problems, ensure_ascii=False),
+                json.dumps(scan.notes, ensure_ascii=False),
                 json.dumps(scan.unmatched, ensure_ascii=False),
                 p.model_dump_json(),
             ),
