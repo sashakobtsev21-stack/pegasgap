@@ -21,14 +21,15 @@ from functools import lru_cache
 
 log = logging.getLogger("pegasgap.linking")
 
-# Плагинная база оператора на ag_main. Имя базы — часть конфигурации, а не константа:
-# у каждого оператора она своя (rawPegasV5_Main, rawAnexV6_Main, ...).
-DEFAULT_DATABASE = os.environ.get("PEGASGAP_PLUGIN_DB") or "rawPegasV5_Main"
+# Плагинная база оператора. Имени по умолчанию нет намеренно: у каждого оператора она
+# своя, и захардкоженное значение из чужого контура — это и утечка внутреннего нейминга,
+# и ловушка (молча подключились бы не туда). Не задано — слой просто выключен.
+DEFAULT_DATABASE = os.environ.get("PEGASGAP_PLUGIN_DB") or ""
 
-# Идентификатор словаря отелей в link_data. Значение из таблицы link_tables той же базы:
-# 3 = hotel. Хардкодить его страшновато, но альтернатива — лишний запрос на каждый прогон
-# ради значения, которое не менялось никогда; проверить можно через `link_tables`.
-HOTEL_DICT_ID = 3
+# Идентификатор словаря отелей в таблице связей. Сверяется по справочнику словарей той же
+# базы; хардкод здесь — компромисс: значение не менялось никогда, а лишний запрос на
+# каждый прогон ради него платить не хочется.
+HOTEL_DICT_ID = int(os.environ.get("PEGASGAP_HOTEL_DICT_ID") or 3)
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ def load_links(database: str = DEFAULT_DATABASE) -> LinkSet:
     и та же, а весит она десятки тысяч строк — перечитывать её на каждый сценарий незачем.
     """
     settings = connection_settings()
-    if settings is None:
+    if settings is None or not database:
         log.info("линковка: доступ к базе не настроен — диагноз без неё")
         return LinkSet.unavailable(database)
     try:

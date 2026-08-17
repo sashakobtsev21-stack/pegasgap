@@ -33,7 +33,7 @@ CATALOG = [
     CatalogHotel(id=6610, name="Britannia Hotel & Villas", stars=4, town_id=11),
 ]
 
-LINKED = LinkSet(database="rawPegasV5_Main", linked_ids=frozenset({46066, 6610}))
+LINKED = LinkSet(database="plugin_db", linked_ids=frozenset({46066, 6610}))
 NO_DB = LinkSet.unavailable()
 
 
