@@ -41,6 +41,12 @@ PRICE_TOLERANCE_PCT = 7.0
 # нормализация имён, чем что у оператора внезапно исчезло две трети каталога.
 MIN_MATCHED_SHARE = 0.34
 
+# Во сколько раз выдачи сторон могут отличаться по размеру, прежде чем сравнение теряет
+# смысл. Доля сопоставленных этого не ловит: если эталон отдал 14 отелей из сотен, они
+# все могут сопоставиться прекрасно — и «отельных пропусков нет» будет означать лишь
+# «мы посмотрели четырнадцать отелей», а не «всё на месте». Ограничение отдельное.
+MAX_COVERAGE_RATIO = 5.0
+
 # Сколько отелей показать как пример в находке «полный пропуск».
 _EXAMPLES = 3
 
@@ -121,6 +127,19 @@ def _collect_problems(
             f"матчинга, а не на реальные пропуски")
 
     return problems
+
+
+def _coverage_is_lopsided(reference_count: int, checked_count: int) -> bool:
+    """Различаются ли объёмы выдач настолько, что сравнивать их нельзя.
+
+    Обе стороны читаются по-разному (шлюз отдаёт выдачу целиком, витрина — постранично),
+    поэтому расхождение в объёме — обычное дело и означает недочитанную ленту, а не
+    исчезнувший каталог.
+    """
+    if not reference_count or not checked_count:
+        return False
+    lo, hi = sorted((reference_count, checked_count))
+    return hi > MAX_COVERAGE_RATIO * lo
 
 
 def _median_offset(match: MatchResult) -> float | None:
@@ -253,18 +272,29 @@ def detect(
     price_gaps, offset = _price_gaps(match, tolerance_pct)
     gaps += price_gaps
 
-    gaps += [
-        HotelGap(
-            kind=GapKind.REVERSE,
-            hotel_name=h.hotel_name,
-            stars=h.stars,
-            resort=h.destination,
-            checked_price=h.price,
-            currency=h.currency,
-            note="есть в нашей выдаче, на эталоне отеля нет",
-        )
-        for h in sorted(match.only_checked, key=lambda h: h.price)
-    ]
+    # Обратные пропуски имеют смысл, только если эталон собран полно. Когда он отдал
+    # заметно меньше отелей, чем наша сторона, каждый лишний отель у нас превращается в
+    # «находку» — и настоящие находки тонут в сотнях строк шума. Считать это пропуском
+    # эталона нельзя: скорее мы не дочитали его выдачу.
+    if _coverage_is_lopsided(len(ref_hotels), len(chk_hotels)):
+        result.problems.append(
+            f"эталон отдал {len(ref_hotels)} отел(ей) против {len(chk_hotels)} у нас — "
+            f"покрытие несопоставимо. Обратные пропуски скрыты как заведомый шум, а "
+            f"отсутствие отельных пропусков ничего не доказывает: сверены только те "
+            f"отели, что успел отдать эталон")
+    else:
+        gaps += [
+            HotelGap(
+                kind=GapKind.REVERSE,
+                hotel_name=h.hotel_name,
+                stars=h.stars,
+                resort=h.destination,
+                checked_price=h.price,
+                currency=h.currency,
+                note="есть в нашей выдаче, на эталоне отеля нет",
+            )
+            for h in sorted(match.only_checked, key=lambda h: h.price)
+        ]
 
     result.gaps = gaps
     result.unmatched = [

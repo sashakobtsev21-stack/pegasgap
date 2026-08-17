@@ -44,12 +44,13 @@ def load_providers() -> None:
 def checked_provider_name() -> str:
     """Чем читать проверяемую сторону: шлюзом или браузером.
 
-    По умолчанию — шлюзом, если заданы доступы: он и точнее, и быстрее. Явный выбор через
-    `PEGASGAP_SLETAT_SOURCE=api|web` перекрывает автоопределение; это нужно, чтобы можно
-    было осознанно сверить один и тот же запрос обоими путями.
+    По умолчанию шлюзом, безусловно. Он отвечает анонимно (нужен лишь заголовок Referer),
+    фильтрует по оператору на сервере и отдаёт статус каждого ТО фактом — то есть лучше
+    браузера по всем пунктам, ради которых инструмент существует. Доступы в окружении
+    на выбор не влияют: они нужны шлюзу не для доступа, а на случай расширенной выдачи.
+
+    `PEGASGAP_SLETAT_SOURCE=web` переключает на браузер — это нужно, чтобы при
+    расследовании сверить один и тот же запрос обоими путями.
     """
     choice = (os.environ.get("PEGASGAP_SLETAT_SOURCE") or "").strip().lower()
-    if choice in ("api", "web"):
-        return "sletat_api" if choice == "api" else "sletat"
-    has_creds = bool(os.environ.get("SLETAT_LOGIN") and os.environ.get("SLETAT_PASSWORD"))
-    return "sletat_api" if has_creds else "sletat"
+    return "sletat" if choice == "web" else "sletat_api"

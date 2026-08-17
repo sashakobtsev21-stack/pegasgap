@@ -237,3 +237,25 @@ def test_weak_match_lands_in_review_not_in_gaps():
     scan = detect(PARAMS, ref, chk)
     assert scan.gaps_of(GapKind.HOTEL) == []
     assert len(scan.unmatched) == 1
+
+
+def test_lopsided_coverage_suppresses_reverse_noise():
+    """Регресс живого прогона: эталон отдал 14 отелей, наша сторона 962 — и инструмент
+    выдал 949 «обратных пропусков», похоронив под ними 4 настоящие находки, да ещё
+    пометил прогон достоверным."""
+    ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(3)])
+    chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(3)]
+                 + [hotel(f"Extra {i}", "100000", "sletat") for i in range(40)])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.gaps_of(GapKind.REVERSE) == []
+    assert not scan.trustworthy
+    assert any("покрытие несопоставимо" in p for p in scan.problems)
+
+
+def test_comparable_coverage_still_reports_reverse():
+    ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(10)])
+    chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(10)]
+                 + [hotel("Extra", "100000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.REVERSE)] == ["Extra"]
+    assert scan.trustworthy

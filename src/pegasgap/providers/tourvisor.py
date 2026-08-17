@@ -185,7 +185,9 @@ def build_hotel_offers(provider_name: str, rows: list[dict]) -> list[HotelOffer]
 # прогон недостоверным (недогруженный отель неотличим от отсутствующего), поэтому упираться
 # в него должно быть исключением, а не нормой.
 MAX_HOTELS = int(os.environ.get("PEGASGAP_MAX_HOTELS") or 300)
-_SCROLL_ROUNDS = 40
+# Сколько раз жать «Найти больше туров». Каждое нажатие добавляет порцию карточек, так что
+# верхнюю границу задаёт MAX_HOTELS; это лишь страховка от зацикливания.
+_LOAD_ROUNDS = 60
 
 # Поля SearchParams, которые tourvisor.ru НЕ выставляет в UI формы и API —
 # у пользователя они выглядят как «применилось», но Tourvisor их игнорирует.
@@ -945,15 +947,17 @@ class TourvisorProvider:
         return build_hotel_offers(self.name, rows)
 
     async def _load_all_hotels(self, page: Page, cap: int) -> bool:
-        """Домотать ленту результатов, пока карточки прибавляются. True = упёрлись в лимит.
+        """Догрузить выдачу до конца. True = упёрлись в предохранитель.
 
-        Инструмент ищет ОТСУТСТВУЮЩИЕ отели, поэтому неполная выдача даёт ложные находки:
-        отель, который просто не догрузился, неотличим от отсутствующего. Лимит нужен как
-        предохранитель от бесконечной ленты, и о том, что он сработал, обязан узнать
-        вызывающий код — тихо обрезанная выдача выглядит как полная.
+        Выдача разворачивается кнопкой «Найти больше туров»
+        (`.TVResultToursShowMoreButton`), а НЕ бесконечной прокруткой: колесо мыши не
+        добавляет ни одной карточки, счётчик стоит на первых ~19. Пока это не было учтено,
+        эталон отдавал два десятка отелей вместо сотен — и сравнение теряло смысл: по
+        такой выборке «отельных пропусков нет» означает лишь «мы посмотрели девятнадцать
+        отелей». Скрытая кнопка помечается классом `TVHide`; её отсутствие среди видимых =
+        выдача кончилась.
         """
-        seen = -1
-        for _ in range(_SCROLL_ROUNDS):
+        for _ in range(_LOAD_ROUNDS):
             try:
                 count = await page.locator(".TVResultItem").count()
             except Exception:
@@ -961,13 +965,28 @@ class TourvisorProvider:
             if count >= cap:
                 log.warning("Tourvisor: выдача обрезана лимитом в %d отелей", cap)
                 return True
-            if count == seen:
-                return False  # лента кончилась
-            seen = count
-            await page.mouse.wheel(0, 20_000)
-            await page.wait_for_timeout(900)
-        log.warning("Tourvisor: лента не сошлась за %d прокруток — выдача может быть неполной",
-                    _SCROLL_ROUNDS)
+            # Именно `:visible`, а не `:not(.TVHide)`: разметка содержит под два десятка
+            # экземпляров кнопки, и первый по DOM — невидимый, клик по нему висит до
+            # таймаута и молча обрывает догрузку на первой же порции.
+            button = page.locator(".TVResultToursShowMoreButton:visible")
+            try:
+                if await button.count() == 0:
+                    return False  # больше нечего показывать
+                await button.first.scroll_into_view_if_needed(timeout=5000)
+                await button.first.click(timeout=5000)
+            except Exception:
+                return False
+            try:
+                # Ждём именно ПРИРОСТА карточек: фиксированная пауза либо режет выдачу на
+                # медленном ответе, либо тратит время впустую на быстром.
+                await page.wait_for_function(
+                    "n => document.querySelectorAll('.TVResultItem').length > n",
+                    arg=count, timeout=20_000,
+                )
+            except PWTimeout:
+                return False  # кнопка есть, а прироста нет — считаем, что всё загружено
+        log.warning("Tourvisor: выдача не сошлась за %d нажатий «Найти больше туров»",
+                    _LOAD_ROUNDS)
         return True
 
     async def _read_checked_operators(self, page: Page) -> list[str] | None:

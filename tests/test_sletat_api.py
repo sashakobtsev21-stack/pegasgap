@@ -17,20 +17,22 @@ from pegasgap.providers.sletat_api import (
     _find_by_name,
     _redact,
     build_hotel_offers,
+    parse_price,
+    parse_stars,
     split_load_state,
 )
 
 
 def row(hotel: str, price: int, operator: str = PEGAS, stars: int = 5,
         resort: str = "Кемер", rating: float = 8.4) -> list:
-    """Строка aaData: массив без имён, значимы только позиции."""
+    """Строка aaData как её отдаёт живой шлюз: массив без имён, цена и звёзды — СТРОКИ."""
     out: list = [None] * (IDX_RATING + 1)
     out[IDX_HOTEL_NAME] = hotel
-    out[IDX_PRICE] = price
+    out[IDX_PRICE] = f"{price} RUB"
     out[IDX_OPERATOR_NAME] = operator
-    out[IDX_STARS] = stars
+    out[IDX_STARS] = f"{stars}*"
     out[IDX_RESORT] = resort
-    out[IDX_RATING] = rating
+    out[IDX_RATING] = str(rating)
     return out
 
 
@@ -144,3 +146,37 @@ def test_find_by_name_returns_none_when_absent():
     """Лучше честно не найти направление, чем угадать не то."""
     assert _find_by_name([{"Id": 7, "Name": "Египет"}], "Турция") is None
     assert _find_by_name(None, "Турция") is None
+
+
+# --------------------------------- форматы живого шлюза ---------------------------------
+
+
+def test_price_comes_with_currency_suffix():
+    """Шлюз отдаёт «12015 RUB», а не число — сверено с живым ответом."""
+    assert parse_price("12015 RUB") == Decimal("12015")
+    assert parse_price("1 250 000 RUB") == Decimal("1250000")
+    assert parse_price(27526) == Decimal("27526")
+    assert parse_price("") is None
+    assert parse_price(None) is None
+
+
+def test_stars_come_with_asterisk():
+    assert parse_stars("2*") == 2
+    assert parse_stars("5*") == 5
+    assert parse_stars("") is None
+    assert parse_stars(None) is None
+
+
+def test_operator_name_index_is_18_not_25():
+    """Документация указывает индекс 25, но в живом ответе там пусто, а имя — на 18.
+    Тест фиксирует проверенный факт, чтобы правка «по документации» его не сломала."""
+    assert IDX_OPERATOR_NAME == 18
+
+
+def test_rating_keeps_fraction():
+    """Рейтинг разбирается отдельно от цены: через ценовой парсер «8.4» стало бы «8»."""
+    from pegasgap.providers.sletat_api import parse_rating
+    assert parse_rating("8.4") == 8.4
+    assert parse_rating("8,4") == 8.4
+    assert parse_rating("0") == 0.0
+    assert parse_rating("") is None
