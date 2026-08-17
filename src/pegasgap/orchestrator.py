@@ -17,7 +17,12 @@ from pegasgap.models import (
     SearchParams,
     is_not_applicable_error,
 )
-from pegasgap.providers import checked_provider_name, get_provider, load_providers
+from pegasgap.providers import (
+    checked_provider_name,
+    get_provider,
+    load_providers,
+    reference_provider_name,
+)
 
 log = logging.getLogger("pegasgap.orchestrator")
 
@@ -53,13 +58,16 @@ async def run_pair(
     load_providers()
     # Ключи словаря — РОЛИ (эталон / проверяемая), а не способ чтения: классификации
     # безразлично, пришла выдача Слетать из шлюза или из браузера.
-    sources = {REFERENCE: REFERENCE, CHECKED: checked_provider_name()}
+    sources = {
+        REFERENCE: reference_provider_name(params.search_mode),
+        CHECKED: checked_provider_name(),
+    }
     instances = {role: get_provider(src)(headless=headless) for role, src in sources.items()}
 
-    log.info("прогон: %s → %s, режим %s, %s..%s, оператор %s (проверяемая сторона: %s)",
+    log.info("прогон: %s → %s, режим %s, %s..%s, оператор %s (эталон: %s, проверяемая: %s)",
              params.departure_city, params.destination_country, params.search_mode,
              params.date_from, params.date_to, ", ".join(params.operators) or "все",
-             sources[CHECKED])
+             sources[REFERENCE], sources[CHECKED])
 
     async def _attempt(name: str, inst) -> tuple[ProviderResult, bool, bool]:
         """Одна попытка под жёстким таймаутом → (результат, был_таймаут, детерм_отказ)."""

@@ -63,6 +63,11 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
         for problem in scan.problems:
             console.print(f"  [red]•[/red] {problem}")
 
+    # Заметки — не сомнение в находках, а контекст для их чтения. Отдельным блоком и
+    # спокойным цветом, чтобы не путались с настоящими проблемами.
+    for note in scan.notes:
+        console.print(f"[dim]ⓘ {note}[/dim]")
+
     if not scan.gaps:
         console.print("\n[green]Расхождений не найдено.[/green]")
     else:
@@ -169,6 +174,9 @@ def write_html(scans: Sequence[ScanResult], path: Path,
             problems = "".join(f"<li>{esc(x)}</li>" for x in scan.problems)
             parts.append(f"<p class='bad'>Прогон недостоверен — находки использовать нельзя:</p>"
                          f"<ul class='bad'>{problems}</ul>")
+        if scan.notes:
+            notes = "".join(f"<li>{esc(x)}</li>" for x in scan.notes)
+            parts.append(f"<ul class='meta'>{notes}</ul>")
         if not scan.gaps:
             parts.append("<p>Расхождений не найдено.</p>")
             continue

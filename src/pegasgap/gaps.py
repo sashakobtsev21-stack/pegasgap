@@ -36,6 +36,15 @@ from pegasgap.names import find_operator, operator_matches
 # выбивается из общего сдвига.
 PRICE_TOLERANCE_PCT = 7.0
 
+# Во сколько медианных абсолютных отклонений укладывается «обычное» расхождение. Ширина
+# полосы берётся по самим данным, а не только из константы выше: на живых прогонах разница
+# цен расползается на 4–13% при медиане 9%, и фиксированный допуск объявлял выбросами
+# отели, где цены совпали ДО РУБЛЯ, — формально верно, а по смыслу дико. Три MAD — обычный
+# робастный порог (≈2σ для нормального распределения), устойчивый к самим выбросам.
+MAD_MULTIPLIER = 3.0
+# Меньше этого числа пар разброс оценивать не по чему — работает голый допуск.
+MIN_PAIRS_FOR_SPREAD = 5
+
 # Ниже этой доли сопоставленных отелей матчинг считается развалившимся. Если из выдачи
 # эталона удалось узнать меньше трети отелей — куда правдоподобнее, что сломалась
 # нормализация имён, чем что у оператора внезапно исчезло две трети каталога.
@@ -142,19 +151,6 @@ def _coverage_is_lopsided(reference_count: int, checked_count: int) -> bool:
     return hi > MAX_COVERAGE_RATIO * lo
 
 
-def _median_offset(match: MatchResult) -> float | None:
-    """Систематический сдвиг цен между площадками, в процентах (медиана по парам).
-
-    Витрины считают цену на разной базе, поэтому постоянный сдвиг — норма. Вычитая его,
-    находим отели, которые выбиваются именно относительно общего фона.
-    """
-    diffs = [
-        float((m.checked.price - m.reference.price) / m.reference.price * 100)
-        for m in match.pairs if m.reference.price
-    ]
-    return statistics.median(diffs) if diffs else None
-
-
 def _full_gap(hotels: list[HotelOffer], status: OperatorStatus) -> HotelGap:
     """Одна находка на весь запрос: у эталона предложения есть, у нас — ни одного."""
     kind = (GapKind.NOT_RESPONDING if status is OperatorStatus.NOT_RESPONDING
@@ -176,17 +172,33 @@ def _full_gap(hotels: list[HotelOffer], status: OperatorStatus) -> HotelGap:
 
 
 def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap], float | None]:
-    """Отели, чья цена выбивается из систематического сдвига между площадками."""
-    offset = _median_offset(match)
-    if offset is None:
+    """Отели, чья цена выбивается из обычного для этого прогона расхождения.
+
+    Полоса «нормального» строится по самим данным: медиана расхождений задаёт центр,
+    медианное абсолютное отклонение — ширину. Иначе на широком разбросе (а он широкий:
+    живой прогон дал 4–13% при медиане 9%) в находки попадали бы отели с точным
+    совпадением цены — формально они дальше всех от медианы, а по сути ничем не
+    примечательны.
+    """
+    diffs = [
+        float((m.checked.price - m.reference.price) / m.reference.price * 100)
+        for m in match.pairs if m.reference.price
+    ]
+    if not diffs:
         return [], None
+    offset = statistics.median(diffs)
+    band = tolerance_pct
+    if len(diffs) >= MIN_PAIRS_FOR_SPREAD:
+        mad = statistics.median([abs(d - offset) for d in diffs])
+        band = max(tolerance_pct, MAD_MULTIPLIER * mad)
+
     out: list[HotelGap] = []
     for m in match.pairs:
         if not m.reference.price:
             continue
         diff = float((m.checked.price - m.reference.price) / m.reference.price * 100)
         deviation = diff - offset
-        if abs(deviation) <= tolerance_pct:
+        if abs(deviation) <= band:
             continue
         out.append(HotelGap(
             kind=GapKind.PRICE,
@@ -197,8 +209,8 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             checked_price=m.checked.price,
             currency=m.reference.currency,
             matched_name=m.checked.hotel_name,
-            note=(f"разница {diff:+.1f}% при общем сдвиге {offset:+.1f}% — "
-                  f"отклонение {deviation:+.1f}%"),
+            note=(f"разница {diff:+.1f}% при обычной для прогона {offset:+.1f}% "
+                  f"(±{band:.1f}) — отклонение {deviation:+.1f}%"),
         ))
     out.sort(key=lambda g: abs(g.diff_pct or 0), reverse=True)
     return out, offset
@@ -272,16 +284,19 @@ def detect(
     price_gaps, offset = _price_gaps(match, tolerance_pct)
     gaps += price_gaps
 
-    # Обратные пропуски имеют смысл, только если эталон собран полно. Когда он отдал
-    # заметно меньше отелей, чем наша сторона, каждый лишний отель у нас превращается в
-    # «находку» — и настоящие находки тонут в сотнях строк шума. Считать это пропуском
-    # эталона нельзя: скорее мы не дочитали его выдачу.
+    # Обратные пропуски имеют смысл, только когда объёмы выдач сопоставимы. Витрина
+    # эталона показывает по оператору выборку (блоки обрезаны), а шлюз отдаёт каталог
+    # целиком — при таком перекосе каждый «лишний» отель у нас стал бы находкой, и
+    # настоящие утонули бы в сотнях строк шума.
+    #
+    # Это ЗАМЕТКА, а не проблема: перекос — свойство площадок, а не сбой сбора. Прямое
+    # направление (отель есть на эталоне, у нас нет) от него не страдает и остаётся
+    # главным результатом. Недособранную выдачу ловит отдельно флаг `truncated`.
     if _coverage_is_lopsided(len(ref_hotels), len(chk_hotels)):
-        result.problems.append(
-            f"эталон отдал {len(ref_hotels)} отел(ей) против {len(chk_hotels)} у нас — "
-            f"покрытие несопоставимо. Обратные пропуски скрыты как заведомый шум, а "
-            f"отсутствие отельных пропусков ничего не доказывает: сверены только те "
-            f"отели, что успел отдать эталон")
+        result.notes.append(
+            f"эталон показал {len(ref_hotels)} отел(ей) против {len(chk_hotels)} у нас — "
+            f"он отдаёт по оператору выборку, а не весь каталог. Обратные пропуски скрыты "
+            f"как заведомый шум; отельные пропуски ищутся среди того, что показал эталон")
     else:
         gaps += [
             HotelGap(

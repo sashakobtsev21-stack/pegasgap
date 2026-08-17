@@ -28,6 +28,7 @@ __all__ = [
     "get_provider",
     "list_providers",
     "load_providers",
+    "reference_provider_name",
     "register_provider",
 ]
 
@@ -38,7 +39,28 @@ def load_providers() -> None:
     Вынесено в функцию, чтобы базовый импорт пакета (модели, матчинг, классификация,
     отчёты) не требовал ни Playwright, ни httpx — они в опциональных группах.
     """
-    from pegasgap.providers import sletat, sletat_api, tourvisor  # noqa: F401
+    from pegasgap.providers import (  # noqa: F401
+        sletat,
+        sletat_api,
+        tourvisor,
+        tourvisor_api,
+    )
+
+
+def reference_provider_name(search_mode: str = "tours") -> str:
+    """Чем читать эталон: JSON-эндпоинтами витрины или браузером.
+
+    По умолчанию JSON — быстрее, полнее и не зависит от вёрстки. Но режим «Отели» у
+    витрины живёт на отдельной форме с другим протоколом, который не разобран, поэтому
+    там остаётся браузер: лучше медленный рабочий путь, чем быстрый неверный.
+
+    `PEGASGAP_TOURVISOR_SOURCE=web` переключает на браузер принудительно — нужно, чтобы
+    при расследовании сверить один запрос обоими путями.
+    """
+    choice = (os.environ.get("PEGASGAP_TOURVISOR_SOURCE") or "").strip().lower()
+    if choice == "web" or search_mode == "hotels":
+        return "tourvisor"
+    return "tourvisor_api"
 
 
 def checked_provider_name() -> str:

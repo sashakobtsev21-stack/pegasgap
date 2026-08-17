@@ -240,16 +240,42 @@ def test_weak_match_lands_in_review_not_in_gaps():
 
 
 def test_lopsided_coverage_suppresses_reverse_noise():
-    """Регресс живого прогона: эталон отдал 14 отелей, наша сторона 962 — и инструмент
-    выдал 949 «обратных пропусков», похоронив под ними 4 настоящие находки, да ещё
-    пометил прогон достоверным."""
+    """Регресс живого прогона: эталон показал 14 отелей, наша сторона 962 — и инструмент
+    выдал 949 «обратных пропусков», похоронив под ними настоящие находки.
+
+    Перекос идёт ЗАМЕТКОЙ, а не проблемой: витрина эталона показывает по оператору
+    выборку, и это её устройство, а не сбор. Считать это поломкой значило бы объявлять
+    недостоверным каждый прогон и обесценить инструмент целиком. Прямое направление
+    (отель есть на эталоне, у нас нет) от перекоса не страдает.
+    """
     ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(3)])
     chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(3)]
                  + [hotel(f"Extra {i}", "100000", "sletat") for i in range(40)])
     scan = detect(PARAMS, ref, chk)
     assert scan.gaps_of(GapKind.REVERSE) == []
+    assert scan.trustworthy
+    assert any("выборку, а не весь каталог" in n for n in scan.notes)
+
+
+def test_hotel_gaps_survive_lopsided_coverage():
+    """Главный класс находок обязан работать и при разном объёме выдач — иначе перекос,
+    который на этих площадках постоянен, отключал бы инструмент насовсем."""
+    ref = result("tourvisor", [hotel("Only On Reference", "100000", "tourvisor"),
+                               hotel("Shared Palace", "100000", "tourvisor")])
+    chk = result("sletat", [hotel("Shared Palace", "100000", "sletat")]
+                 + [hotel(f"Extra {i}", "100000", "sletat") for i in range(40)])
+    scan = detect(PARAMS, ref, chk)
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.HOTEL)] == ["Only On Reference"]
+    assert scan.trustworthy
+
+
+def test_truncated_collection_is_still_a_problem():
+    """Недособранная выдача — именно поломка: отель мог не догрузиться, а выглядит как
+    отсутствующий. От структурного перекоса это отличается принципиально."""
+    ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")], truncated=True)
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
     assert not scan.trustworthy
-    assert any("покрытие несопоставимо" in p for p in scan.problems)
 
 
 def test_comparable_coverage_still_reports_reverse():
@@ -259,3 +285,30 @@ def test_comparable_coverage_still_reports_reverse():
     scan = detect(PARAMS, ref, chk)
     assert [g.hotel_name for g in scan.gaps_of(GapKind.REVERSE)] == ["Extra"]
     assert scan.trustworthy
+
+
+def test_wide_spread_does_not_turn_exact_matches_into_findings():
+    """Регресс живого прогона: разница цен расползлась на 4–13% при медиане 9%, и три
+    отеля, где цена совпала ДО РУБЛЯ, попали в находки как «отклонение −9%». Формально
+    они дальше всех от медианы, по сути — ничем не примечательны. Полоса нормального
+    должна строиться по фактическому разбросу."""
+    spread = [0.0, 0.0, 0.0, 4.2, 4.6, 8.5, 9.1, 9.8, 10.3, 11.4, 12.1, 12.6, 13.5]
+    base = 100000
+    ref = result("tourvisor", [hotel(f"H{i}", str(base), "tourvisor")
+                               for i in range(len(spread))])
+    chk = result("sletat", [hotel(f"H{i}", str(int(base * (1 + d / 100))), "sletat")
+                            for i, d in enumerate(spread)])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.gaps_of(GapKind.PRICE) == []
+
+
+def test_true_outlier_survives_wide_spread():
+    """Расширение полосы не должно глушить настоящий выброс."""
+    spread = [0.0, 0.0, 0.0, 4.2, 4.6, 8.5, 9.1, 9.8, 10.3, 11.4, 12.1, 12.6, 90.0]
+    base = 100000
+    ref = result("tourvisor", [hotel(f"H{i}", str(base), "tourvisor")
+                               for i in range(len(spread))])
+    chk = result("sletat", [hotel(f"H{i}", str(int(base * (1 + d / 100))), "sletat")
+                            for i, d in enumerate(spread)])
+    scan = detect(PARAMS, ref, chk)
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H12"]
