@@ -287,6 +287,50 @@ class GapKind(StrEnum):
         }[self]
 
 
+class HotelDiagnosis(StrEnum):
+    """Почему отеля не оказалось в нашей выдаче — по внутренним справочникам.
+
+    Ради этого различия инструмент и затевался: «пропуска нет» без причины — это тикет,
+    который некому взять. Каждое значение указывает на конкретное действие и на конкретную
+    команду, которая его выполняет.
+    """
+
+    NOT_IN_CATALOG = "not_in_catalog"      # отеля нет в справочнике Слетать
+    NOT_LINKED = "not_linked"              # отель есть, но у оператора нет линковки
+    LINKED_NO_OFFER = "linked_no_offer"    # линковка есть, а тура в выдаче не было
+    # Отель в справочнике опознан, но линковку проверить не удалось (нет доступа к базе).
+    # Отдельно от UNKNOWN: половина ответа уже есть, и путать «мы кое-что выяснили» с
+    # «мы не смотрели» значит терять то, что выяснили.
+    IN_CATALOG_UNCHECKED = "in_catalog_unchecked"
+    UNCERTAIN = "uncertain"                # со справочником уверенно не сопоставился
+    UNKNOWN = "unknown"                    # проверка не выполнялась
+
+    @property
+    def title(self) -> str:
+        return {
+            HotelDiagnosis.NOT_IN_CATALOG: "нет в справочнике",
+            HotelDiagnosis.NOT_LINKED: "нет линковки",
+            HotelDiagnosis.LINKED_NO_OFFER: "линкован, тура нет",
+            HotelDiagnosis.IN_CATALOG_UNCHECKED: "есть в справочнике",
+            HotelDiagnosis.UNCERTAIN: "не опознан",
+            HotelDiagnosis.UNKNOWN: "не проверялось",
+        }[self]
+
+    @property
+    def action(self) -> str:
+        return {
+            HotelDiagnosis.NOT_IN_CATALOG: "завести отель в справочнике Слетать",
+            HotelDiagnosis.NOT_LINKED: "связать отель оператора с внутренним справочником",
+            HotelDiagnosis.LINKED_NO_OFFER: "справочники в порядке — смотреть наличие "
+                                            "у оператора и логи поиска",
+            HotelDiagnosis.IN_CATALOG_UNCHECKED: "проверить линковку у оператора "
+                                                 "(нужен доступ к плагинной базе)",
+            HotelDiagnosis.UNCERTAIN: "сверить название вручную: возможно, отель у нас есть "
+                                      "под другим именем",
+            HotelDiagnosis.UNKNOWN: "запустить с доступом к справочникам",
+        }[self]
+
+
 class HotelGap(BaseModel):
     """Одно расхождение по отелю — единица разбора для коллеги."""
 
@@ -299,6 +343,12 @@ class HotelGap(BaseModel):
     currency: str = "RUB"
     matched_name: str | None = None       # как отель называется на второй площадке
     note: str = ""
+    # Разбор причины по внутренним справочникам. Заполняется отдельным проходом
+    # (`diagnosis.diagnose`) уже после классификации: `detect` остаётся чистой функцией
+    # без сети и БД, а диагноз требует и того, и другого.
+    diagnosis: HotelDiagnosis = HotelDiagnosis.UNKNOWN
+    catalog_id: int | None = None         # внутренний ID отеля в справочнике Слетать
+    catalog_name: str | None = None       # как отель называется в справочнике
 
     @property
     def diff_abs(self) -> Decimal | None:

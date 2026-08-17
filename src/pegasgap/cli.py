@@ -21,9 +21,12 @@ from rich.console import Console
 
 from pegasgap import report as reporting
 from pegasgap import storage
+from pegasgap.catalog import fetch_catalog, resolve_country_id
+from pegasgap.diagnosis import diagnose
 from pegasgap.gaps import detect
+from pegasgap.linking import load_links
 from pegasgap.logging_setup import configure_logging
-from pegasgap.models import PEGAS, ScanResult, SearchParams
+from pegasgap.models import PEGAS, GapKind, ScanResult, SearchParams
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 
@@ -71,9 +74,25 @@ _load_dotenv()
 console = Console()
 
 
-async def _run_one(params: SearchParams, operator: str, headless: bool) -> ScanResult:
+async def _run_one(params: SearchParams, operator: str, headless: bool,
+                   with_diagnosis: bool = True) -> ScanResult:
     results = await run_pair(params, headless=headless)
-    return detect(params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
+    scan = detect(params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
+    if with_diagnosis and scan.gaps_of(GapKind.HOTEL):
+        # Разбор причин стоит запроса справочника, поэтому делаем его только когда есть
+        # что разбирать: на чистом прогоне это была бы плата ни за что.
+        await _diagnose(scan)
+    return scan
+
+
+async def _diagnose(scan: ScanResult) -> None:
+    """Проставить отельным пропускам причину по справочникам. Ошибки не фатальны."""
+    country_id = await resolve_country_id(scan.params.destination_country)
+    catalog = await fetch_catalog(country_id) if country_id else []
+    # Чтение базы блокирующее — уводим в поток, чтобы не морозить цикл событий, когда
+    # обход идёт параллельно.
+    links = await asyncio.to_thread(load_links)
+    diagnose(scan, catalog, links)
 
 
 async def _run_many(items: list[SearchParams], operator: str, headless: bool,

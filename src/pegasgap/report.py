@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import html
+from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -22,11 +23,12 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from pegasgap.models import GapKind, HotelGap, ScanResult
+from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 CSV_COLUMNS = [
     "run_at", "режим", "город вылета", "страна", "даты", "класс", "отель", "звёзды",
-    "курорт", "цена эталон", "цена наша", "разница %", "новая", "комментарий",
+    "курорт", "цена эталон", "цена наша", "разница %", "новая",
+    "причина", "id в справочнике", "что делать", "комментарий",
 ]
 
 
@@ -36,6 +38,13 @@ def _money(value) -> str:
 
 def _diff(gap: HotelGap) -> str:
     return f"{gap.diff_pct:+.1f}%" if gap.diff_pct is not None else "—"
+
+
+def _cause(gap: HotelGap) -> str:
+    """Разбор по справочникам — только там, где он есть смысл (отельные пропуски)."""
+    if gap.kind is not GapKind.HOTEL or gap.diagnosis is HotelDiagnosis.UNKNOWN:
+        return ""
+    return gap.diagnosis.title
 
 
 def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
@@ -75,6 +84,7 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
         table.add_column("")
         table.add_column("класс")
         table.add_column("отель")
+        table.add_column("причина")
         table.add_column("эталон", justify="right")
         table.add_column("наша", justify="right")
         table.add_column("Δ", justify="right")
@@ -85,6 +95,7 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
                 "[yellow]new[/yellow]" if is_new else "",
                 gap.kind.title,
                 gap.hotel_name + (f" {gap.stars}*" if gap.stars else ""),
+                _cause(gap),
                 _money(gap.reference_price),
                 _money(gap.checked_price),
                 _diff(gap),
@@ -98,6 +109,12 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
             found = scan.gaps_of(kind)
             if found:
                 console.print(f"  [dim]{kind.title} ({len(found)}): {kind.hint}[/dim]")
+        # Разбор по справочникам точнее общей подсказки класса: он говорит не «чаще всего
+        # причина такая», а что именно с этим отелем и что с ним делать.
+        causes = Counter(g.diagnosis for g in scan.gaps_of(GapKind.HOTEL)
+                         if g.diagnosis is not HotelDiagnosis.UNKNOWN)
+        for diagnosis, count in causes.most_common():
+            console.print(f"  [dim]  └ {diagnosis.title} ({count}): {diagnosis.action}[/dim]")
 
     if scan.unmatched:
         console.print(f"\n[yellow]Требуют проверки — отели сопоставлены неуверенно "
@@ -138,7 +155,10 @@ def write_csv(scans: Sequence[ScanResult], path: Path, new_keys: set[str] | None
                     f"{p.date_from:%d.%m.%Y}–{p.date_to:%d.%m.%Y}",
                     gap.kind.title, gap.hotel_name, gap.stars or "", gap.resort or "",
                     gap.reference_price or "", gap.checked_price or "", _diff(gap),
-                    "да" if gap.key() in new_keys else "", gap.note,
+                    "да" if gap.key() in new_keys else "",
+                    _cause(gap), gap.catalog_id or "",
+                    gap.diagnosis.action if _cause(gap) else "",
+                    gap.note,
                 ])
     return path
 
@@ -180,15 +200,16 @@ def write_html(scans: Sequence[ScanResult], path: Path,
         if not scan.gaps:
             parts.append("<p>Расхождений не найдено.</p>")
             continue
-        parts.append("<table><tr><th></th><th>Класс</th><th>Отель</th><th>Эталон</th>"
-                     "<th>Наша</th><th>Δ</th><th>Комментарий</th></tr>")
+        parts.append("<table><tr><th></th><th>Класс</th><th>Отель</th><th>Причина</th>"
+                     "<th>Эталон</th><th>Наша</th><th>Δ</th><th>Комментарий</th></tr>")
         for gap in sorted(scan.gaps, key=lambda g: (g.key() not in new_keys, g.kind)):
             is_new = gap.key() in new_keys
             stars = f" {gap.stars}*" if gap.stars else ""
             parts.append(
                 f"<tr class='{'new' if is_new else ''}'>"
                 f"<td>{'новое' if is_new else ''}</td><td>{esc(gap.kind.title)}</td>"
-                f"<td>{esc(gap.hotel_name)}{stars}</td><td>{_money(gap.reference_price)}</td>"
+                f"<td>{esc(gap.hotel_name)}{stars}</td><td>{esc(_cause(gap))}</td>"
+                f"<td>{_money(gap.reference_price)}</td>"
                 f"<td>{_money(gap.checked_price)}</td><td>{_diff(gap)}</td>"
                 f"<td>{esc(gap.note)}</td></tr>")
         parts.append("</table>")

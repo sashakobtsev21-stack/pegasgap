@@ -57,7 +57,10 @@ CREATE TABLE IF NOT EXISTS gaps (
     checked_price   TEXT,
     currency        TEXT    NOT NULL DEFAULT 'RUB',
     matched_name    TEXT,
-    note            TEXT    NOT NULL DEFAULT ''
+    note            TEXT    NOT NULL DEFAULT '',
+    diagnosis       TEXT    NOT NULL DEFAULT 'unknown',
+    catalog_id      INTEGER,
+    catalog_name    TEXT
 );
 
 -- Возраст находки: когда впервые увидели и сколько прогонов подряд она держится.
@@ -77,12 +80,33 @@ CREATE INDEX IF NOT EXISTS idx_gaps_kind     ON gaps(kind);
 """
 
 
+# Колонки, добавленные после первых прогонов. CREATE TABLE их уже содержит, но базы,
+# созданные раньше, о них не знают — SQLite не умеет «добавить, если нет», поэтому
+# сверяемся с PRAGMA. Без этого обновление кода роняло бы накопленную историю.
+_MIGRATIONS = {
+    "gaps": {
+        "diagnosis": "TEXT NOT NULL DEFAULT 'unknown'",
+        "catalog_id": "INTEGER",
+        "catalog_name": "TEXT",
+    },
+}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, columns in _MIGRATIONS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for column, ddl in columns.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
 def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     """Открыть (при необходимости создав) базу."""
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     return conn
 
 
@@ -128,13 +152,15 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
         conn.executemany(
             """INSERT INTO gaps (
                    run_id, gap_key, kind, hotel_name, stars, resort,
-                   reference_price, checked_price, currency, matched_name, note)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   reference_price, checked_price, currency, matched_name, note,
+                   diagnosis, catalog_id, catalog_name)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (run_id, g.key(), g.kind.value, g.hotel_name, g.stars, g.resort,
                  str(g.reference_price) if g.reference_price is not None else None,
                  str(g.checked_price) if g.checked_price is not None else None,
-                 g.currency, g.matched_name, g.note)
+                 g.currency, g.matched_name, g.note,
+                 g.diagnosis.value, g.catalog_id, g.catalog_name)
                 for g in scan.gaps
             ],
         )

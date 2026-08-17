@@ -238,7 +238,11 @@ class TourvisorApiProvider:
         log.info("Tourvisor (json): отелей у «%s»: %d за %.1f с", operator,
                  len(hotel_offers), dur)
         return ProviderResult(
-            provider=self.name, success=bool(hotel_offers or offers),
+            # Поиск состоялся — значит успех, даже если предложений ноль. Пустой эталон
+            # это законный ответ «у оператора тут ничего нет», а не сбор данных: если
+            # считать его неудачей, каждое такое направление помечало бы прогон
+            # недостоверным и засоряло отчёт несуществующими проблемами.
+            provider=self.name, success=finished,
             duration_seconds=dur, search_mode=params.search_mode,
             offers=offers, hotel_offers=hotel_offers, operator_offers=operator_offers,
             operators_no_tours=no_tours, operators_not_responding=not_responding,
@@ -246,7 +250,7 @@ class TourvisorApiProvider:
             # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
             # отель неотличим от отсутствующего.
             truncated=not finished,
-            error=None if (hotel_offers or offers) else "Предложений не найдено.",
+            error=None if finished else "Поиск не завершился за отведённое время.",
         )
 
     def _fail(self, params: SearchParams, start: float, error: str) -> ProviderResult:
