@@ -56,6 +56,13 @@ MIN_MATCHED_SHARE = 0.34
 # «мы посмотрели четырнадцать отелей», а не «всё на месте». Ограничение отдельное.
 MAX_COVERAGE_RATIO = 5.0
 
+# Систематическая разница цен, выше которой сравнение перестаёт быть сравнением. Разная
+# база (агентская против розничной) даёт единицы процентов; полсотни означает, что стороны
+# считают РАЗНОЕ — иной состав тура, другое число туристов, другая длительность. Живой
+# прогон по Вьетнаму дал ровно −48% на каждом из сорока пяти отелей: такая равномерность
+# исключает случайность и выдаёт различие в определении цены, а не в самой цене.
+MAX_PLAUSIBLE_OFFSET_PCT = 25.0
+
 # Сколько отелей показать как пример в находке «полный пропуск».
 _EXAMPLES = 3
 
@@ -187,6 +194,10 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
     if not diffs:
         return [], None
     offset = statistics.median(diffs)
+    # Стороны считают разное — сравнивать нечего. Сдвиг возвращаем (он и есть симптом),
+    # а находок не даём: они были бы ранжированием шума.
+    if abs(offset) > MAX_PLAUSIBLE_OFFSET_PCT:
+        return [], offset
     band = tolerance_pct
     if len(diffs) >= MIN_PAIRS_FOR_SPREAD:
         mad = statistics.median([abs(d - offset) for d in diffs])
@@ -316,6 +327,14 @@ def detect(
         f"{m.reference.hotel_name} ≈ {m.checked.hotel_name} ({m.reason})" for m in match.review
     ]
     result.price_offset_pct = round(offset, 2) if offset is not None else None
+    if offset is not None and abs(offset) > MAX_PLAUSIBLE_OFFSET_PCT:
+        # Проблема, а не заметка: при двукратной разнице в цене нельзя утверждать, что
+        # стороны выполнили один и тот же поиск, — а значит и к остальным находкам этого
+        # прогона доверия нет. Лучше отдать пустой прогон, чем правдоподобный вымысел.
+        result.problems.append(
+            f"цены сторон систематически расходятся на {offset:+.0f}% — это не разница "
+            f"в цене, а разное её определение (состав тура, число туристов, длительность). "
+            f"Находки по цене не показаны, к остальным относиться с подозрением")
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
     return result

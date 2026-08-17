@@ -312,3 +312,31 @@ def test_true_outlier_survives_wide_spread():
                             for i, d in enumerate(spread)])
     scan = detect(PARAMS, ref, chk)
     assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H12"]
+
+
+def test_implausible_offset_kills_price_findings():
+    """Регресс живого прогона по Вьетнаму: цены Слетать оказались ровно вдвое ниже
+    Турвизора — −48% на КАЖДОМ из сорока пяти сопоставленных отелей. Такая равномерность
+    означает не разницу цен, а разное её определение: стороны считают не одно и то же.
+    Инструмент выдавал шесть «находок», ранжируя шум."""
+    base = 480000
+    ref = result("tourvisor", [hotel(f"H{i}", str(base + i), "tourvisor") for i in range(10)])
+    chk = result("sletat", [hotel(f"H{i}", str(int((base + i) * 0.52)), "sletat")
+                            for i in range(10)])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.gaps_of(GapKind.PRICE) == []
+    assert not scan.trustworthy
+    assert any("разное её определение" in p for p in scan.problems)
+    assert scan.price_offset_pct is not None    # сам сдвиг показываем: это и есть симптом
+
+
+def test_plausible_offset_still_yields_findings():
+    """Обычная разница витрин находки не глушит."""
+    diffs = [9.0] * 9 + [40.0]
+    base = 100000
+    ref = result("tourvisor", [hotel(f"H{i}", str(base), "tourvisor") for i in range(10)])
+    chk = result("sletat", [hotel(f"H{i}", str(int(base * (1 + d / 100))), "sletat")
+                            for i, d in enumerate(diffs)])
+    scan = detect(PARAMS, ref, chk)
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H9"]
+    assert scan.trustworthy
