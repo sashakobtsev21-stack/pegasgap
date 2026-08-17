@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pegasgap"
+version = "0.1.0"
+description = "Мониторинг пропусков туроператора Pegas: где предложения есть на Турвизоре, но их нет на Слетать"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    # Верхние границы — чтобы автообновление до новой МАЖОРНОЙ версии не сломало
+    # сборку тихо (лок-файла нет). Поднимать осознанно после проверки.
+    "pydantic>=2.6,<3",
+    "typer>=0.12,<1",
+    "pyyaml>=6,<7",
+    # Используется напрямую в report.py/cli.py: не полагаемся на то, что typer
+    # притащит его транзитивно.
+    "rich>=13,<16",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.44,<2"]
+api = ["httpx>=0.27,<1"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    # Ruff БЕЗ верхней границы делает линт-гейт зависимым от даты установки:
+    # набор правил по умолчанию расширяется от версии к версии, и «зелёный»
+    # репозиторий краснеет сам собой. Пин + явный select ниже фиксируют гейт.
+    "ruff>=0.5,<0.17",
+]
+
+[project.scripts]
+pegasgap = "pegasgap.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pegasgap"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+# Явный набор вместо «того, что ruff считает дефолтом сегодня»: гейт не должен
+# зависеть от версии линтера. E/F — базовая корректность, остальное — правила,
+# которые в этом проекте реально ловят ошибки, а не стиль.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "B008",    # typer объявляет опции дефолтами через Option(...) — это его идиома
+    "RUF001",  # кириллица в строках — проект русскоязычный по определению
+    "RUF002",
+    "RUF003",
+    # SIM105 (`contextlib.suppress` вместо try/except/pass) — чистый стиль, ошибок не ловит.
+    # В коде провайдеров try/except/pass стоит десяток раз: это идиома защитного скрапинга
+    # («элемента может не быть — идём дальше»), каждый блок прокомментирован, и переписывать
+    # рабочие селекторные куски ради формы — риск без выгоды.
+    "SIM105",
+]
