@@ -55,11 +55,14 @@ def test_load_matrix_reads_file(tmp_path):
     assert len(matrix.build(date(2026, 9, 1))) == 8
 
 
-def test_load_matrix_rejects_empty_countries(tmp_path):
+def test_load_matrix_rejects_empty_directions(tmp_path):
+    """Направления можно задать двумя способами, но хотя бы один нужен — и в ошибке
+    должны быть названы оба, иначе непонятно, чего именно не хватает."""
     path = tmp_path / "scenarios.yaml"
     path.write_text("windows:\n  - offset_days: 14\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="страны"):
+    with pytest.raises(ValueError, match="направления") as exc:
         load_matrix(path)
+    assert "countries" in str(exc.value) and "routes" in str(exc.value)
 
 
 def test_load_matrix_rejects_bad_mode(tmp_path):
@@ -81,3 +84,58 @@ def test_shipped_config_is_valid():
     matrix = load_matrix("scenarios.yaml")
     assert matrix.operator == PEGAS
     assert matrix.build(date(2026, 9, 1))
+
+
+# --------------------------------- явные маршруты ---------------------------------
+
+ROUTES_CONFIG = """
+operator: Pegas Touristik
+defaults:
+  modes: [tours]
+routes:
+  - {from: Москва, country: ОАЭ}
+  - {from: Санкт-Петербург, country: Турция}
+windows:
+  - offset_days: 30
+"""
+
+
+def test_routes_are_pairs_not_cross_product(tmp_path):
+    """Объём оператора живёт на паре «откуда → куда»: из Москвы в ОАЭ его тысячи, из
+    Петербурга туда же может не быть вовсе. Перемножать города на страны — значит
+    гарантированно намолотить пустых сценариев."""
+    path = tmp_path / "scenarios.yaml"
+    path.write_text(ROUTES_CONFIG, encoding="utf-8")
+    matrix = load_matrix(path)
+    assert matrix.pairs() == [("Москва", "ОАЭ"), ("Санкт-Петербург", "Турция")]
+    items = matrix.build(date(2026, 9, 1))
+    assert len(items) == 2                       # 2 маршрута × 1 режим × 1 окно
+    assert {(i.departure_city, i.destination_country) for i in items} == {
+        ("Москва", "ОАЭ"), ("Санкт-Петербург", "Турция")}
+
+
+def test_routes_win_over_cross_product(tmp_path):
+    """Заданы маршруты — countries и departure_cities не участвуют, иначе получился бы
+    молчаливый гибрид, в котором непонятно, что именно проверяется."""
+    path = tmp_path / "scenarios.yaml"
+    path.write_text(ROUTES_CONFIG + "countries: [Египет, Таиланд]\n", encoding="utf-8")
+    matrix = load_matrix(path)
+    assert len(matrix.pairs()) == 2
+    assert all(c != "Египет" for _, c in matrix.pairs())
+
+
+def test_route_without_country_is_rejected(tmp_path):
+    path = tmp_path / "scenarios.yaml"
+    path.write_text("routes:\n  - {from: Москва}\nwindows:\n  - offset_days: 30\n",
+                    encoding="utf-8")
+    with pytest.raises(ValueError, match="country"):
+        load_matrix(path)
+
+
+def test_cross_product_still_works_without_routes(tmp_path):
+    """Старая форма конфига остаётся рабочей — ломать её ради новой незачем."""
+    path = tmp_path / "scenarios.yaml"
+    path.write_text(CONFIG, encoding="utf-8")
+    matrix = load_matrix(path)
+    assert not matrix.routes
+    assert len(matrix.pairs()) == 2              # 1 город × 2 страны

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from pegasgap import report as reporting
 from pegasgap import storage
@@ -28,6 +29,8 @@ from pegasgap.linking import load_links
 from pegasgap.logging_setup import configure_logging
 from pegasgap.models import PEGAS, GapKind, ScanResult, SearchParams
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
+from pegasgap.providers.sletat_api import GATEWAY_CITY
+from pegasgap.ranking import RouteVolume, VolumeProbe, client_factory, to_yaml_routes
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 
 app = typer.Typer(add_completion=False, help="Мониторинг пропусков туроператора на выдаче Слетать.")
@@ -200,6 +203,71 @@ def sweep(
                   f"параллельно {jobs}")
     scans = asyncio.run(_run_many(items, matrix.operator, headless, jobs))
     _persist_and_show(scans, db, csv_path, html_path)
+
+
+@app.command()
+def top(
+    limit: int = typer.Option(12, "--top", "-n", help="Сколько направлений показать"),
+    departure: str = typer.Option(GATEWAY_CITY, "--from", "-f", help="Город вылета"),
+    nights: int = typer.Option(7, "--nights"),
+    offset: int = typer.Option(30, "--offset-days", help="Через сколько дней вылет"),
+    operator_id: int = typer.Option(3, "--operator-id", help="ID оператора в справочнике"),
+) -> None:
+    """Найти направления с наибольшим объёмом у оператора.
+
+    Печатает готовый блок `routes:` для scenarios.yaml. Автоматически он НЕ применяется:
+    список направлений, который меняется сам, — плохое свойство для мониторинга, потому
+    что направление может тихо выпасть из наблюдения и никто этого не заметит. Решение
+    остаётся за человеком и видно в истории изменений конфига.
+    """
+    configure_logging(logging.WARNING)   # замер шумный, а нужен только его результат
+    routes, skipped = asyncio.run(
+        _measure_top(limit, departure, nights, offset, operator_id))
+
+    table = Table(title=f"Направления по объёму оператора · вылет из «{departure}»",
+                  header_style="bold")
+    table.add_column("#", justify="right")
+    table.add_column("страна")
+    table.add_column("предложений", justify="right")
+    for i, volume in enumerate(routes, 1):
+        table.add_row(str(i), volume.country, str(volume.rows))
+    console.print(table)
+
+    if skipped:
+        console.print(f"\n[yellow]Не удалось замерить ({len(skipped)}):[/yellow]")
+        for volume in skipped[:15]:
+            console.print(f"  • {volume.country} [dim]— {volume.error} "
+                          f"({volume.seconds:.1f} с)[/dim]")
+        console.print("[dim]Если дело в скорости — такое направление в регулярный обход "
+                      "лучше не брать: времени съест много, находок даст столько же.[/dim]")
+
+    console.print("\n[bold]Вставьте в scenarios.yaml[/bold] "
+                  "[dim](вместо блоков countries и departure_cities)[/dim]:\n")
+    console.print(to_yaml_routes(routes))
+
+
+async def _measure_top(limit: int, departure: str, nights: int, offset: int,
+                       operator_id: int) -> tuple[list[RouteVolume], list[RouteVolume]]:
+    """Два шага: отсечь страны, где оператора нет, затем замерить оставшиеся.
+
+    Первый шаг почти бесплатный и снимает четыре пятых работы: из сотни стран у
+    оператора активны единицы.
+    """
+    probe = VolumeProbe(operator_id=operator_id, nights=nights, offset_days=offset)
+    async with client_factory() as client:
+        await probe.load_refdata(client)
+
+        console.print("[dim]1/2 ищу страны, где оператор активен…[/dim]")
+        countries = await probe.active_countries(client)
+        if not countries:
+            raise typer.BadParameter("оператор не активен ни в одной стране")
+        console.print(f"[dim]    активен в {len(countries)}: {', '.join(countries)}[/dim]")
+
+        console.print(f"[dim]2/2 замеряю объём по {len(countries)} странам…[/dim]")
+        measured = await probe.rank(client, [(departure, c) for c in countries])
+
+    return ([v for v in measured if v.has_volume][:limit],
+            [v for v in measured if not v.measured])
 
 
 @app.command()

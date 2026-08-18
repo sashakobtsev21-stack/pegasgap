@@ -180,3 +180,46 @@ def test_rating_keeps_fraction():
     assert parse_rating("8,4") == 8.4
     assert parse_rating("0") == 0.0
     assert parse_rating("") is None
+
+
+# --------------------------------- город вылета ---------------------------------
+
+
+def test_gateway_serves_only_one_departure_city():
+    """Шлюз не применяет cityFromId: для Москвы, Петербурга, Казани и Тюмени он вернул
+    побайтово одинаковые выдачу, цены (30332…76566) и счётчики — отличалось только эхо
+    параметра в строке. Значит для любого другого города мы сравнивали бы РЕАЛЬНУЮ
+    выдачу Турвизора с чужой нашей, и каждое расхождение было бы выдумкой."""
+    from pegasgap.providers.sletat_api import GATEWAY_CITY, city_is_supported
+    assert city_is_supported(GATEWAY_CITY)
+    assert city_is_supported(GATEWAY_CITY.lower())      # регистр не должен мешать
+    assert not city_is_supported("Казань")
+    assert not city_is_supported("")
+
+
+async def test_unsupported_city_fails_instead_of_lying():
+    """Отказ, а не молчаливый неверный ответ: пустой результат честнее выдуманных находок."""
+    from datetime import date
+
+    from pegasgap.models import SearchParams
+    from pegasgap.providers.sletat_api import SletatApiProvider
+    params = SearchParams(
+        departure_city="Казань", destination_country="Турция",
+        date_from=date(2026, 9, 16), date_to=date(2026, 9, 23),
+        nights_min=7, nights_max=7, adults=2,
+    )
+    result = await SletatApiProvider().search(params)
+    assert result.success is False
+    assert "города вылета" in (result.error or "")
+
+
+def test_rate_limit_is_recognised_as_quota_not_breakage():
+    """Шлюз считает поиски по IP и при превышении отвечает мгновенным отказом. Это квота,
+    а не свойство направления: путать одно с другим значит либо выбросить рабочее
+    направление из ранжирования, либо сжечь остаток лимита частыми повторами."""
+    from pegasgap.ranking import is_rate_limited
+    assert is_rate_limited(
+        "IPS [172.30.67.201 - SLETAT.RU]: С вашего IP адреса превышен лимит "
+        "кол-ва поисковых запросов. Обратитесь в службу поддержки")
+    assert not is_rate_limited("поиск не завершился за 45 с")
+    assert not is_rate_limited("")
