@@ -173,8 +173,14 @@ export default function MonitorPage() {
                       <div className="font-medium text-ink">
                         {f.departure_city} → {f.country}
                       </div>
+                      {/* Длительность обязательна: она измерение матрицы, и без неё
+                          семь ночей и десять выглядят одной строкой, повторённой дважды.
+                          Первым делом это и приняли за дубликаты в отчёте. */}
                       <div className="text-[11px] text-muted">
                         {formatDate(f.date_from)}–{formatDate(f.date_to)} ·{" "}
+                        {f.params?.nights_min === f.params?.nights_max
+                          ? `${f.params?.nights_min} ноч.`
+                          : `${f.params?.nights_min}–${f.params?.nights_max} ноч.`} ·{" "}
                         {f.search_mode === "hotels" ? "отели" : "туры"} ·{" "}
                         {formatShortDateTime(f.run_at)}
                       </div>
