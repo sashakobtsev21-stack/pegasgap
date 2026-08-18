@@ -50,17 +50,16 @@ def load_providers() -> None:
 def reference_provider_name(search_mode: str = "tours") -> str:
     """Чем читать эталон: JSON-эндпоинтами витрины или браузером.
 
-    По умолчанию JSON — быстрее, полнее и не зависит от вёрстки. Но режим «Отели» у
-    витрины живёт на отдельной форме с другим протоколом, который не разобран, поэтому
-    там остаётся браузер: лучше медленный рабочий путь, чем быстрый неверный.
+    По умолчанию JSON — быстрее, полнее и не зависит от вёрстки. Оба режима идут одним
+    протоколом: «Отели» у витрины не отдельный поиск, а тот же с `formmode=1` и
+    псевдогородом вылета «Без перелета».
 
     `PEGASGAP_TOURVISOR_SOURCE=web` переключает на браузер принудительно — нужно, чтобы
     при расследовании сверить один запрос обоими путями.
     """
+    del search_mode          # оба режима обслуживает один источник
     choice = (os.environ.get("PEGASGAP_TOURVISOR_SOURCE") or "").strip().lower()
-    if choice == "web" or search_mode == "hotels":
-        return "tourvisor"
-    return "tourvisor_api"
+    return "tourvisor" if choice == "web" else "tourvisor_api"
 
 
 def checked_provider_name() -> str:

@@ -55,7 +55,15 @@ RESULT_URL = "https://search3.tourvisor.ru/modresult.php"
 # Оба эндпоинта требуют реферер — и заголовком, и параметром запроса. Без него ответ
 # приходит пустым; это часть контракта, а не обход защиты.
 REFERER = "https://tourvisor.ru/"
-REFERRER_PARAM = "https://tourvisor.ru/tours/"
+# `referrer` должен указывать на ТУ САМУЮ страницу, чью форму мы имитируем: с туровым
+# реферером запрос в режиме отелей отбивается 401. Проверяется, судя по всему, связка
+# «страница ↔ formmode», а не просто наличие параметра.
+REFERRER_TOURS = "https://tourvisor.ru/tours/"
+REFERRER_HOTELS = "https://tourvisor.ru/poisk-otelej"
+
+# «Город вылета» для режима без перелёта. Витрина моделирует проживание без билета как
+# отдельный псевдогород, а не отдельный вид поиска.
+_NO_FLIGHT_DEPARTURE = 99
 
 DESKTOP_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
@@ -184,11 +192,6 @@ class TourvisorApiProvider:
     async def search(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
-        if params.search_mode == "hotels":
-            # Форма «без перелёта» у витрины отдельная и с другим протоколом; выдавать
-            # по ней туровую выдачу нельзя — сравнение получилось бы не тех сущностей.
-            return self._fail(params, start,
-                              "режим «Отели» не поддерживается этим источником Турвизора")
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout_ms / 1000,
@@ -208,7 +211,8 @@ class TourvisorApiProvider:
                 operator_id = self._operator_id(lists, operator)
                 request_id, states = await self._start(
                     client, params, city_id, country_id, operator_id)
-                blocks, finished = await self._await_result(client, request_id)
+                blocks, finished = await self._await_result(
+                    client, request_id, self._referrer(params))
                 hotels = await self._hotels(client, country_id)
                 regions = _region_names(lists)
         except NotApplicableError as exc:
@@ -263,8 +267,10 @@ class TourvisorApiProvider:
 
     # --- вызовы ---
 
-    async def _get(self, client: httpx.AsyncClient, url: str, **query: Any) -> dict:
-        response = await client.get(url, params={**query, "referrer": REFERRER_PARAM})
+    async def _get(self, client: httpx.AsyncClient, url: str, referrer: str | None = None,
+                   **query: Any) -> dict:
+        response = await client.get(
+            url, params={**query, "referrer": referrer or REFERRER_TOURS})
         if response.status_code != 200:
             raise TourvisorApiError(f"{url}: HTTP {response.status_code}")
         try:
@@ -294,37 +300,48 @@ class TourvisorApiProvider:
 
     async def _start(self, client: httpx.AsyncClient, params: SearchParams, city_id: int,
                      country_id: int, operator_id: int | None) -> tuple[int, list[dict]]:
+        hotels_only = params.search_mode == "hotels"
         query: dict[str, Any] = {
             "datefrom": _fmt(params.date_from), "dateto": _fmt(params.date_to),
             "nightsfrom": params.nights_min, "nightsto": params.nights_max,
             "adults": params.adults, "child": len(params.children_ages),
-            "country": country_id, "departure": city_id,
+            "country": country_id,
+            # Режим «Отели» — это тот же поиск с другой формой: `formmode=1` и особый
+            # «город вылета» 99 («Без перелета»). Отдельного протокола у витрины нет,
+            # хотя форма на сайте выглядит самостоятельной.
+            "departure": _NO_FLIGHT_DEPARTURE if hotels_only else city_id,
+            "formmode": 1 if hotels_only else 0,
             "directflight": 1 if params.direct_only else 0,
             # regular=0 не ограничивает поиск регулярными рейсами: на массовых
             # направлениях перевозка чартерная, и с regular=1 выдача была бы куцей.
             "regular": 0,
             "meal": 0, "rating": 0, "pricefrom": 0, "priceto": 0,
-            "currency": 0, "formmode": 0, "pricetype": 0,
+            "currency": 0, "pricetype": 0,
         }
         if params.children_ages:
             query["childage1"] = params.children_ages[0]
         if operator_id is not None:
             query["operators"] = operator_id
-        body = await self._get(client, SEARCH_URL, **query)
+        body = await self._get(client, SEARCH_URL, referrer=self._referrer(params), **query)
         result = body.get("result") or {}
         request_id = _to_int(result.get("requestid"))
         if not request_id:
             raise TourvisorApiError("modsearch не вернул requestid")
         return request_id, list(result.get("operators") or [])
 
-    async def _await_result(self, client: httpx.AsyncClient,
-                            request_id: int) -> tuple[list[dict], bool]:
+    @staticmethod
+    def _referrer(params: SearchParams) -> str:
+        return REFERRER_HOTELS if params.search_mode == "hotels" else REFERRER_TOURS
+
+    async def _await_result(self, client: httpx.AsyncClient, request_id: int,
+                            referrer: str) -> tuple[list[dict], bool]:
         """Опрашивать результат до `status.finished`. Второй элемент — успели ли."""
         deadline = time.monotonic() + POLL_TIMEOUT_S
         blocks: list[dict] = []
         while time.monotonic() < deadline:
             await asyncio.sleep(POLL_INTERVAL_S)
-            data = (await self._get(client, RESULT_URL, requestid=request_id)).get("data") or {}
+            data = (await self._get(client, RESULT_URL, referrer=referrer,
+                                    requestid=request_id)).get("data") or {}
             blocks = list(data.get("block") or [])
             if (data.get("status") or {}).get("finished"):
                 return blocks, True
