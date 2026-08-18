@@ -18,6 +18,7 @@ import logging
 from collections import defaultdict
 
 from pegasgap.catalog import CatalogHotel
+from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import LinkSet
 from pegasgap.matching import Confidence, compare, core
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
@@ -125,6 +126,56 @@ def diagnose_gap(gap: HotelGap, index: CatalogIndex, links: LinkSet) -> None:
         gap.note = f"{where} — связи с каталогом оператора нет"
 
 
+# Какая доля пропущенных отелей должна уверенно опознаться в нашем справочнике, чтобы
+# вердикт «матчинг развалился» считался опровергнутым.
+MIN_CATALOG_RESOLVED_SHARE = 0.6
+
+# Диагнозы, означающие «отель уверенно найден в справочнике Слетать». UNCERTAIN сюда не
+# входит намеренно: неуверенное совпадение как раз и есть симптом слабой нормализации.
+_RESOLVED = frozenset({
+    HotelDiagnosis.IN_CATALOG_UNCHECKED,
+    HotelDiagnosis.LINKED_NO_OFFER,
+    HotelDiagnosis.NOT_LINKED,
+})
+
+
+def refute_match_collapse(scan: ScanResult, targets: list[HotelGap]) -> None:
+    """Снять вердикт «матчинг развалился», если справочник доказывает обратное.
+
+    Низкая доля сопоставленных отелей двусмысленна: она одинаково выглядит и когда
+    развалилась нормализация имён, и когда у оператора действительно нет почти ничего из
+    того, что показал эталон. `detect` выбирает осторожную версию, потому что других
+    данных у него нет — справочник появляется только здесь.
+
+    А справочник эту двусмысленность снимает. Опознание в нём идёт ТЕМ ЖЕ матчером, что и
+    сопоставление выдач: если имена эталона уверенно находят свои карточки у нас, то
+    нормализация заведомо жива, и объяснить нечем, кроме отсутствия предложений.
+
+    Живой прогон по России: эталон показал 53 отеля, сопоставились 2, и прогон был
+    объявлен недостоверным — а 43 из 50 пропущенных при этом нашлись в справочнике по
+    имени. Полсотни настоящих находок уходили в мусор из-за осторожности, которой было
+    чем возразить.
+
+    Снимается ТОЛЬКО этот вердикт. Все прочие проблемы прогона остаются в силе, и если
+    была хоть одна — прогон так и останется недостоверным.
+    """
+    stale = [p for p in scan.problems if MATCH_COLLAPSE_MARKER in p]
+    if not stale or not targets:
+        return
+
+    resolved = sum(1 for g in targets if g.diagnosis in _RESOLVED)
+    share = resolved / len(targets)
+    if share < MIN_CATALOG_RESOLVED_SHARE:
+        return
+
+    for problem in stale:
+        scan.problems.remove(problem)
+    scan.notes.append(
+        f"мало сопоставленных отелей, но {resolved} из {len(targets)} пропущенных "
+        f"({share:.0%}) уверенно нашлись в справочнике Слетать — значит имена читаются "
+        f"и дело не в матчинге, а в отсутствии предложений у оператора")
+
+
 def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet) -> ScanResult:
     """Разобрать причины всех отельных пропусков прогона.
 
@@ -140,6 +191,7 @@ def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet) -> S
         for gap in targets:
             counts[gap.diagnosis.value] += 1
         log.info("диагноз по %d отельным пропускам: %s", len(targets), dict(counts))
+        refute_match_collapse(scan, targets)
     if not index:
         scan.notes.append("справочник отелей Слетать недоступен — причины пропусков "
                           "не разобраны")

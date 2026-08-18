@@ -355,3 +355,24 @@ def test_reverse_gaps_are_off_by_default():
     scan = detect(PARAMS, ref, chk)
     assert scan.gaps_of(GapKind.REVERSE) == []
     assert any("обратные пропуски не показаны" in n for n in scan.notes)
+
+
+def test_two_pairs_are_too_few_to_judge_price():
+    """Живой прогон по России: сопоставились ровно две пары, и обе попали в ценовые
+    находки. При двух точках медиана совпадает с наблюдением, и каждая пара оказывается
+    выбросом относительно другой — это сравнение пары с ней же самой, а не находка."""
+    ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor"),
+                               hotel("B Grand", "100000", "tourvisor")])
+    chk = result("sletat", [hotel("A Palace", "126000", "sletat"),
+                            hotel("B Grand", "91000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.gaps_of(GapKind.PRICE) == []
+    assert scan.price_offset_pct is not None      # сам сдвиг всё равно записан
+
+
+def test_three_pairs_are_enough_to_spot_the_odd_one():
+    ref = result("tourvisor", [hotel(f"H{i}", "100000", "tourvisor") for i in range(3)])
+    chk = result("sletat", [hotel("H0", "100000", "sletat"), hotel("H1", "101000", "sletat"),
+                            hotel("H2", "150000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H2"]

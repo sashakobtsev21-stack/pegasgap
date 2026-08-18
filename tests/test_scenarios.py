@@ -139,3 +139,43 @@ def test_cross_product_still_works_without_routes(tmp_path):
     matrix = load_matrix(path)
     assert not matrix.routes
     assert len(matrix.pairs()) == 2              # 1 город × 2 страны
+
+
+def test_durations_are_a_case_dimension(tmp_path):
+    """Оператор отваливается не «по стране», а на конкретной длительности: неделя есть,
+    десять ночей уже нет. Значит длительность — измерение кейса, а не число на весь обход."""
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operator: Pegas Touristik\n"
+        "defaults:\n  modes: [tours]\n  nights: [7, 10, {min: 12, max: 14}]\n"
+        "routes:\n  - {from: Москва, country: Турция}\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    built = load_matrix(cfg).build(date(2026, 9, 1))
+    assert [(p.nights_min, p.nights_max) for p in built] == [(7, 7), (10, 10), (12, 14)]
+
+
+def test_old_nights_pair_is_still_understood(tmp_path):
+    """По старой паре написаны конфиги и README — молча перестать её понимать значит
+    сломать обход тому, кто просто не обновил файл."""
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operator: Pegas Touristik\n"
+        "defaults:\n  modes: [tours]\n  nights_min: 10\n  nights_max: 12\n"
+        "routes:\n  - {from: Москва, country: Турция}\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    built = load_matrix(cfg).build(date(2026, 9, 1))
+    assert [(p.nights_min, p.nights_max) for p in built] == [(10, 12)]
+
+
+def test_backwards_duration_is_rejected(tmp_path):
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operator: Pegas Touristik\n"
+        "defaults:\n  modes: [tours]\n  nights: [{min: 14, max: 7}]\n"
+        "routes:\n  - {from: Москва, country: Турция}\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    with pytest.raises(ValueError, match="задом наперёд"):
+        load_matrix(cfg)

@@ -31,6 +31,19 @@ class Window:
 
 
 @dataclass
+class Nights:
+    """Длительность одного кейса: сколько ночей искать."""
+
+    minimum: int = 7
+    maximum: int = 7
+
+    @property
+    def label(self) -> str:
+        return f"{self.minimum}" if self.minimum == self.maximum \
+            else f"{self.minimum}-{self.maximum}"
+
+
+@dataclass
 class Pax:
     """Состав туристов одного кейса."""
 
@@ -61,9 +74,11 @@ class Matrix:
     # и «трое взрослых с ребёнком двенадцати лет» — разные поиски с разной выдачей, и
     # находка по одному ничего не говорит о другом.
     pax: list[Pax] = field(default_factory=lambda: [Pax()])
+    # Длительности. Тоже измерение кейса, а не одно число на весь обход: оператор часто
+    # отваливается не «по стране», а на конкретной длительности — неделя есть, десять
+    # ночей уже нет. На единственной длительности такой пропуск невидим.
+    durations: list[Nights] = field(default_factory=lambda: [Nights()])
     adults: int = 2
-    nights_min: int = 7
-    nights_max: int = 7
 
     def pairs(self) -> list[tuple[str, str]]:
         """Направления как список пар — из `routes` либо перекрёстным произведением."""
@@ -80,21 +95,53 @@ class Matrix:
         for city, country in self.pairs():
             for mode in self.modes:
                 for window in self.windows:
-                    for pax in self.pax:
-                        date_from, date_to = window.dates(today)
-                        out.append(SearchParams(
-                            departure_city=city,
-                            destination_country=country,
-                            date_from=date_from,
-                            date_to=date_to,
-                            nights_min=self.nights_min,
-                            nights_max=self.nights_max,
-                            adults=pax.adults,
-                            children_ages=list(pax.children),
-                            search_mode=mode,  # type: ignore[arg-type]
-                            operators=[self.operator],
-                        ))
+                    for nights in self.durations:
+                        for pax in self.pax:
+                            date_from, date_to = window.dates(today)
+                            out.append(SearchParams(
+                                departure_city=city,
+                                destination_country=country,
+                                date_from=date_from,
+                                date_to=date_to,
+                                nights_min=nights.minimum,
+                                nights_max=nights.maximum,
+                                adults=pax.adults,
+                                children_ages=list(pax.children),
+                                search_mode=mode,  # type: ignore[arg-type]
+                                operators=[self.operator],
+                            ))
         return out
+
+
+def _read_durations(defaults: dict, path: Path) -> list[Nights]:
+    """Длительности из конфига: список `nights` либо старая пара nights_min/nights_max.
+
+    Пару оставляем читаемой намеренно — по ней написаны и конфиги, и примеры в README,
+    и молча переставать её понимать значит сломать обход у того, кто просто не обновил
+    файл. Список, если он задан, побеждает.
+    """
+    raw = defaults.get("nights")
+    if raw is None:
+        return [Nights(minimum=int(defaults.get("nights_min") or 7),
+                       maximum=int(defaults.get("nights_max")
+                                   or defaults.get("nights_min") or 7))]
+    if not isinstance(raw, list):
+        raise ValueError(f"В {path} ключ `nights` должен быть списком длительностей")
+
+    out: list[Nights] = []
+    for item in raw:
+        # Число — фиксированная длительность, пара — диапазон.
+        if isinstance(item, dict):
+            low = int(item.get("min") or item.get("nights_min") or 7)
+            high = int(item.get("max") or item.get("nights_max") or low)
+        else:
+            low = high = int(item)
+        if high < low:
+            raise ValueError(f"В {path} длительность задом наперёд: {low}-{high}")
+        out.append(Nights(minimum=low, maximum=high))
+    if not out:
+        raise ValueError(f"В {path} список `nights` пуст")
+    return out
 
 
 def load_matrix(path: Path | str = DEFAULT_CONFIG) -> Matrix:
@@ -122,8 +169,7 @@ def load_matrix(path: Path | str = DEFAULT_CONFIG) -> Matrix:
                  children=[int(a) for a in (p.get("children") or [])])
              for p in (defaults.get("pax") or [{}])],
         adults=int(defaults.get("adults") or 2),
-        nights_min=int(defaults.get("nights_min") or 7),
-        nights_max=int(defaults.get("nights_max") or defaults.get("nights_min") or 7),
+        durations=_read_durations(defaults, path),
         windows=[Window(offset_days=int(w["offset_days"]),
                         length_days=int(w.get("length_days") or 7))
                  for w in (raw.get("windows") or [])],

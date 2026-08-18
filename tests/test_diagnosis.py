@@ -195,3 +195,57 @@ def test_note_complements_the_verdict_instead_of_repeating_it():
     g = diagnosed("Sun Star Beach")
     assert g.diagnosis.title not in g.note
     assert "40475" in g.note and "Sun Star Beach" in g.note
+
+
+# ------------------------- опровержение вердикта о матчинге -------------------------
+
+COLLAPSE = "сопоставлено лишь 4% отелей эталона — похоже на сбой матчинга, а не на реальные пропуски"
+
+
+def test_catalog_refutes_the_match_collapse_verdict():
+    """Живой прогон по России: эталон показал 53 отеля, сопоставились 2, прогон объявлен
+    недостоверным — а 43 из 50 пропущенных нашлись в справочнике по имени. Опознание идёт
+    тем же матчером, значит имена читаются, и полсотни находок теряться не должны."""
+    scan = scan_with([gap("Kemer Star Hotel"), gap("Sun Star Beach"),
+                      gap("Britannia Hotel & Villas"), gap("Тьмутаракань")])
+    scan.problems.append(COLLAPSE)
+
+    diagnose(scan, CATALOG, NO_DB)
+
+    assert scan.trustworthy
+    assert not any("сбой матчинга" in p for p in scan.problems)
+    assert any("уверенно нашлись в справочнике" in n for n in scan.notes)
+
+
+def test_verdict_survives_when_the_catalog_agrees_it_is_broken():
+    """Если имена эталона не находят себя и в справочнике — нормализация правда развалилась,
+    и осторожный вердикт остаётся."""
+    scan = scan_with([gap("Тьмутаракань"), gap("Зазеркалье"), gap("Кудыкина гора")])
+    scan.problems.append(COLLAPSE)
+
+    diagnose(scan, CATALOG, NO_DB)
+
+    assert not scan.trustworthy
+    assert any("сбой матчинга" in p for p in scan.problems)
+
+
+def test_refutation_clears_only_its_own_verdict():
+    """Снимается ровно один вердикт. Прочие проблемы прогона к справочнику отношения
+    не имеют, и трогать их нельзя."""
+    scan = scan_with([gap("Kemer Star Hotel"), gap("Sun Star Beach")])
+    scan.problems += [COLLAPSE, "проверяемая: выдача получена не целиком"]
+
+    diagnose(scan, CATALOG, NO_DB)
+
+    assert scan.problems == ["проверяемая: выдача получена не целиком"]
+    assert not scan.trustworthy
+
+
+def test_no_catalog_cannot_refute_anything():
+    """Без справочника доказывать нечем — вердикт остаётся."""
+    scan = scan_with([gap("Kemer Star Hotel"), gap("Sun Star Beach")])
+    scan.problems.append(COLLAPSE)
+
+    diagnose(scan, [], NO_DB)
+
+    assert not scan.trustworthy
