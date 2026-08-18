@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { m } from "framer-motion";
 import {
-  CalendarDays, Globe2, ListChecks, ListPlus, Loader2, Moon, Pause, Play,
+  Building2, CalendarDays, Globe2, ListChecks, ListPlus, Loader2, Moon, Pause, Play,
   PlaneTakeoff, Search, Users,
 } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
@@ -76,6 +76,7 @@ function SingleScan() {
     nights: 7,
     adults: 2,
     mode: "tours",
+    operator: "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -89,7 +90,10 @@ function SingleScan() {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const countries = refdata?.countries?.length ? refdata.countries : COUNTRIES;
   const cities = refdata?.departure_cities?.length ? refdata.departure_cities : DEPARTURE_CITIES;
-  const operator = refdata?.operator || "Pegas Touristik";
+  const operators = refdata?.operators?.length ? refdata.operators : ["Pegas Touristik"];
+  // Пустое значение в форме = «первый из конфига», решает бэк. Как только справочник
+  // приехал, подставляем явно — иначе в поле висел бы пустой выбор.
+  const operator = form.operator || operators[0];
 
   async function submit(e) {
     e.preventDefault();
@@ -97,7 +101,8 @@ function SingleScan() {
     setError(null);
     try {
       const { run_id } = await postJson("/api/scan", {
-        ...form, nights: Number(form.nights), adults: Number(form.adults),
+        ...form, operator,
+        nights: Number(form.nights), adults: Number(form.adults),
       });
       navigate(`/run/${run_id}`);
     } catch (err) {
@@ -118,13 +123,18 @@ function SingleScan() {
             Проверить направление
           </h1>
           <p className="text-xs text-muted">
-            Оператор <b className="text-ink">{operator}</b> · результат сразу, на этой же
-            странице
+            Результат сразу, на этой же странице
           </p>
         </div>
       </div>
 
       <form onSubmit={submit} className="space-y-4">
+        <Field label="Туроператор" icon={Building2} className="min-w-0">
+          <Select icon value={operator} onChange={set("operator")}>
+            {operators.map((o) => <option key={o} value={o}>{o}</option>)}
+          </Select>
+        </Field>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Страна" icon={Globe2} className="min-w-0">
             <Select icon searchable value={form.country} onChange={set("country")}>

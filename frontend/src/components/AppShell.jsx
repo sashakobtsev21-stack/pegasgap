@@ -48,10 +48,10 @@ export default function AppShell({ route = "/", children }) {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="bg-gradient-to-r from-brand-soft to-ocean bg-clip-text text-lg font-extrabold tracking-tight text-transparent">
-                Pegas Gap
+                Gap Monitor
               </span>
               <span className="hidden text-xs text-muted sm:inline">
-                где у оператора есть туры на Турвизоре и нет у нас
+                где у операторов есть туры на Турвизоре и нет у нас
               </span>
             </div>
           </a>

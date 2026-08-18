@@ -59,6 +59,9 @@ class ScanRequest(BaseModel):
     nights: int = Field(default=7, ge=1, le=30)
     adults: int = Field(default=2, ge=1, le=6)
     mode: str = "tours"
+    # Оператор выбирается на форме: их несколько, и точечная проверка чаще всего нужна
+    # именно чтобы разобрать жалобу по конкретному ТО. Пусто — берём первый из конфига.
+    operator: str | None = None
 
     def to_params(self, operator: str) -> SearchParams:
         if self.mode not in ("tours", "hotels"):
@@ -186,9 +189,20 @@ def _run_dict(run: Any, gaps: list[Any]) -> dict:
 def create_app(db_path: str | Path = storage.DEFAULT_DB,
                config_path: str | Path = DEFAULT_CONFIG,
                operator: str = PEGAS) -> FastAPI:
-    app = FastAPI(title="Pegas Gap", docs_url="/api/docs", redoc_url=None)
+    app = FastAPI(title="Gap Monitor", docs_url="/api/docs", redoc_url=None)
     db_path = Path(db_path)
     sweep = SweepState()
+
+    # Список операторов берём из конфига: обход идёт по всем, и точечная проверка должна
+    # уметь то же самое. Конфиг может не читаться (его правят руками) — тогда работаем
+    # с одним оператором, а не падаем на старте.
+    try:
+        operators = load_matrix(config_path).operators or [operator]
+    except (OSError, ValueError) as exc:
+        log.warning("конфиг сценариев не прочитан (%s) — только «%s»", exc, operator)
+        operators = [operator]
+    if operator not in operators:
+        operator = operators[0]
 
     @app.get("/healthz")
     async def healthz() -> dict:
@@ -213,12 +227,17 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     cities = sorted({str(x["Name"]).strip() for x in ds if x.get("Name")})
         except Exception as exc:
             log.warning("справочники недоступны (%s) — отдаю запасные", type(exc).__name__)
-        return {"countries": countries, "departure_cities": cities, "operator": operator}
+        return {"countries": countries, "departure_cities": cities,
+                "operator": operator, "operators": operators}
 
     @app.post("/api/scan")
     async def scan(req: ScanRequest) -> dict:
-        params = req.to_params(operator)
-        run_id, result = await run_scan(params, operator, db_path)
+        wanted = (req.operator or "").strip() or operator
+        if wanted not in operators:
+            raise HTTPException(
+                400, f"оператор «{wanted}» не в списке: {', '.join(operators)}")
+        params = req.to_params(wanted)
+        run_id, result = await run_scan(params, wanted, db_path)
         return {"run_id": run_id, "gaps": len(result.gaps), "trustworthy": result.trustworthy}
 
     @app.get("/api/runs/{run_id}")

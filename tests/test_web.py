@@ -195,3 +195,20 @@ def test_sweep_matrix_lists_actual_scenarios(tmp_path):
     # Даты конкретные, а не смещения — иначе список не помог бы свериться.
     assert first["date_from"].count("-") == 2
     assert first["date_from"] < first["date_to"]
+
+
+def test_point_check_can_pick_the_operator(client):
+    """Операторов несколько, и точечная проверка чаще всего нужна именно чтобы разобрать
+    жалобу по конкретному ТО — без выбора она проверяла бы всегда первого."""
+    assert "operators" in client.get("/api/refdata").json()
+
+
+def test_unknown_operator_is_refused_not_silently_swapped(client):
+    """Молча подменить оператора значит показать человеку разбор чужой выдачи."""
+    r = client.post("/api/scan", json={
+        "country": "Турция", "departure": "Москва",
+        "date_from": "2026-09-20", "date_to": "2026-09-27",
+        "operator": "Библио-Глобус",
+    })
+    assert r.status_code == 400
+    assert "не в списке" in r.json()["detail"]
