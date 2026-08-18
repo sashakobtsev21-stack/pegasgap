@@ -158,7 +158,7 @@ export default function MonitorPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="w-10 py-2 pr-2 font-semibold">✓</th>
@@ -167,8 +167,7 @@ export default function MonitorPage() {
                   <th className="py-2 pr-3 font-semibold">Туристы</th>
                   <th className="py-2 pr-3 font-semibold">Класс</th>
                   <th className="py-2 pr-3 font-semibold">Отель</th>
-                  <th className="py-2 pr-3 font-semibold">Цены</th>
-                  <th className="py-2 font-semibold">Причина</th>
+                  <th className="py-2 font-semibold">Цены</th>
                 </tr>
               </thead>
               <tbody>
@@ -239,19 +238,8 @@ export default function MonitorPage() {
                           </a>
                         )}
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                      <td className="py-2 whitespace-nowrap text-xs">
                         <Prices f={g.head} />
-                      </td>
-                      <td className="py-2 text-xs text-muted">
-                        <div>{g.head.cause}</div>
-                        {g.head.action && (
-                          <div className="mt-0.5 text-[11px] text-amber-200/80">
-                            → {g.head.action}
-                          </div>
-                        )}
-                        {g.head.note && (
-                          <div className="mt-0.5 text-[11px] opacity-70">{g.head.note}</div>
-                        )}
                       </td>
                     </tr>
 
@@ -272,8 +260,7 @@ export default function MonitorPage() {
                                  className="text-brand-soft hover:underline">открыть поиск</a>
                             : null}
                         </td>
-                        <td className="py-1.5 pr-3"><Prices f={f} /></td>
-                        <td className="py-1.5 text-muted">{formatShortDateTime(f.run_at)}</td>
+                        <td className="py-1.5"><Prices f={f} /></td>
                       </tr>
                     ))}
                   </Fragment>
