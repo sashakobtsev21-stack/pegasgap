@@ -294,6 +294,66 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
     return out, offset
 
 
+# Во сколько раз разница в рублях должна быть ровнее самих цен, чтобы считать её ОДНОЙ
+# составляющей тура. Тур — это перелёт плюс проживание, и перевозка одна на все отели:
+# разойдись стороны в ней, разница у каждого отеля будет одинаковой до рубля, тогда как
+# цены отелей между собой различаются заметно. Живой замер по Грузии: 209262/134195,
+# 212956/137888, 198182/123115 — разница 75067, 75068, 75067 на все двадцать семь пар.
+_FLAT_DIFF_RATIO = 5.0
+
+# Ниже этого разброса самих цен отеля вопрос неразрешим: если все отели стоят одинаково,
+# постоянная разница в рублях и постоянная в процентах — одно и то же, и утверждать
+# что-то одно значит гадать. Регресс по Вьетнаму как раз такой: цены различались на рубли.
+_MIN_PRICE_SPREAD = 0.01
+
+
+def _relative_spread(values: list[float]) -> float | None:
+    """Разброс относительно середины. None — середина в нуле, мерить не от чего."""
+    middle = statistics.median(values)
+    if not middle:
+        return None
+    return statistics.median([abs(v - middle) for v in values]) / abs(middle)
+
+
+def _is_flat_component(deltas: list[float], prices: list[float]) -> bool:
+    """Разница ровнее самих цен во много раз — значит это одна составляющая тура."""
+    delta_spread = _relative_spread(deltas)
+    price_spread = _relative_spread(prices)
+    if delta_spread is None or price_spread is None:
+        return False
+    # Цены отелей сами почти не различаются — постоянная разница в рублях и постоянная
+    # в процентах неотличимы, и выбирать между ними значило бы гадать.
+    if price_spread < _MIN_PRICE_SPREAD:
+        return False
+    return delta_spread * _FLAT_DIFF_RATIO <= price_spread
+
+
+def _systematic_gap_verdict(match: MatchResult, offset: float) -> str:
+    """Объяснить крупный систематический сдвиг: он бывает двух разных природ.
+
+    Постоянная разница В РУБЛЯХ означает несовпадение отдельной составляющей тура —
+    практически всегда перевозки. Это НАСТОЯЩАЯ разница цен, просто не про отели, и
+    разбирать её надо один раз на прогон, а не по каждому отелю.
+
+    Пропорциональная разница означает, что стороны считают разное: другой состав тура,
+    другое число туристов, другая длительность.
+    """
+    pairs = [p for p in match.pairs if p.reference.price]
+    tail = "Находки по цене не показаны, к остальным относиться с подозрением"
+    if len(pairs) >= MIN_PAIRS_FOR_SPREAD:
+        deltas = [float(p.checked.price - p.reference.price) for p in pairs]
+        prices = [float(p.reference.price) for p in pairs]
+        if _is_flat_component(deltas, prices):
+            middle = statistics.median(deltas)
+            side = "дороже" if middle > 0 else "дешевле"
+            return (f"у нас {side} на {abs(middle):,.0f} на КАЖДОМ отеле одинаково "
+                    f"({offset:+.0f}%) — расходится не цена отелей, а общая составляющая "
+                    f"тура, почти наверняка перевозка. {tail}").replace(",", " ")
+    return (f"цены сторон систематически расходятся на {offset:+.0f}% — это не разница "
+            f"в цене, а разное её определение (состав тура, число туристов, длительность). "
+            f"{tail}")
+
+
 def detect(
     params: SearchParams,
     reference: ProviderResult | None,
@@ -403,13 +463,9 @@ def detect(
     ]
     result.price_offset_pct = round(offset, 2) if offset is not None else None
     if offset is not None and abs(offset) > MAX_PLAUSIBLE_OFFSET_PCT:
-        # Проблема, а не заметка: при двукратной разнице в цене нельзя утверждать, что
-        # стороны выполнили один и тот же поиск, — а значит и к остальным находкам этого
-        # прогона доверия нет. Лучше отдать пустой прогон, чем правдоподобный вымысел.
-        result.problems.append(
-            f"цены сторон систематически расходятся на {offset:+.0f}% — это не разница "
-            f"в цене, а разное её определение (состав тура, число туристов, длительность). "
-            f"Находки по цене не показаны, к остальным относиться с подозрением")
+        # Проблема, а не заметка: при такой разнице нельзя утверждать, что стороны считают
+        # одно и то же, — а значит и к остальным находкам прогона доверия нет.
+        result.problems.append(_systematic_gap_verdict(match, offset))
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
     result.checked_hotels = len(chk_hotels)

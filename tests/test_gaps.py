@@ -396,3 +396,41 @@ def test_three_pairs_are_enough_to_spot_the_odd_one():
                             hotel("H2", "150000", "sletat")])
     scan = detect(PARAMS, ref, chk)
     assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H2"]
+
+
+def test_flat_rouble_difference_is_named_as_the_flight():
+    """Живой замер по Грузии: 209262/134195, 212956/137888, 198182/123115 — разница
+    75067 рублей на каждом отеле одинаково. Тур это перелёт плюс проживание, перевозка
+    одна на все отели: ровная разница в рублях означает её, а не цену отелей."""
+    prices = [180000, 200000, 215000, 235000, 260000, 290000]
+    ref = result("tourvisor", [hotel(f"H{i}", str(v), "tourvisor")
+                               for i, v in enumerate(prices)])
+    chk = result("sletat", [hotel(f"H{i}", str(v - 75000), "sletat")
+                            for i, v in enumerate(prices)])
+    scan = detect(PARAMS, ref, chk)
+    verdict = " ".join(scan.problems)
+    assert "перевозка" in verdict
+    assert "75 000" in verdict
+    assert not scan.trustworthy
+
+
+def test_proportional_divergence_keeps_the_old_wording():
+    """Разъехалось пропорционально — значит стороны считают разное, а не разошлись
+    в одной составляющей."""
+    ref = result("tourvisor", [hotel(f"H{i}", str(100000 * (i + 1)), "tourvisor")
+                               for i in range(6)])
+    chk = result("sletat", [hotel(f"H{i}", str(50000 * (i + 1)), "sletat")
+                            for i in range(6)])
+    scan = detect(PARAMS, ref, chk)
+    verdict = " ".join(scan.problems)
+    assert "разное её определение" in verdict
+    assert "перевозка" not in verdict
+
+
+def test_flat_verdict_is_not_claimed_when_hotels_cost_the_same():
+    """Если все отели стоят почти одинаково, постоянная разница в рублях и постоянная
+    в процентах неотличимы — утверждать про перевозку значило бы гадать."""
+    ref = result("tourvisor", [hotel(f"H{i}", str(480000 + i), "tourvisor") for i in range(8)])
+    chk = result("sletat", [hotel(f"H{i}", str(250000 + i), "sletat") for i in range(8)])
+    scan = detect(PARAMS, ref, chk)
+    assert not any("перевозка" in p for p in scan.problems)
