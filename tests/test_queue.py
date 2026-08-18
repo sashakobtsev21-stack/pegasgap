@@ -349,3 +349,23 @@ def test_pegas_case_key_is_unchanged_so_history_survives():
     args = ("Москва", "Турция", "tours", date(2026, 9, 1), date(2026, 9, 8), 7, 2, [])
     assert q.case_key(*args) == q.case_key(*args, "Pegas Touristik")
     assert q.case_key(*args, "Coral Travel") != q.case_key(*args)
+
+
+def test_case_params_carry_the_case_operator_not_a_default():
+    """Воркер навязывал свой оператор каждому кейсу, и кейсы Coral и Sunmar отмечались
+    пройденными, хотя искался по ним Pegas. Оператор — измерение кейса, он и решает."""
+    case = q.Case(
+        id=1, operator="Sunmar", departure_city="Москва", country="Турция",
+        search_mode="tours", date_from=date(2026, 9, 1), date_to=date(2026, 9, 8),
+        nights=7, adults=2, children_ages=[], priority=0, last_checked=None,
+        checks=0, gaps_found=0)
+    assert case.to_params().operators == ["Sunmar"]
+
+
+def test_worker_does_not_override_the_case_operator():
+    import inspect
+
+    from pegasgap.worker import Worker
+    src = inspect.getsource(Worker._scan)
+    assert "case.to_params()" in src
+    assert "self.operator" not in src

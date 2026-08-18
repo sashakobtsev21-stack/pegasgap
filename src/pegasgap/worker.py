@@ -151,7 +151,12 @@ class Worker:
         if self._run_scan is not None:
             return await self._run_scan(case)
         from pegasgap.web import run_scan  # локальный импорт: web тянет FastAPI
-        return await run_scan(case.to_params(self.operator), self.operator, self.db_path)
+        # Оператор берётся ИЗ КЕЙСА, а не из воркера. Раньше воркер навязывал свой
+        # (по умолчанию Pegas) каждому кейсу: очередь честно отмечала кейсы Coral и
+        # Sunmar пройденными, а искался по ним всё тот же Pegas. Восемьсот шестнадцать
+        # прогонов ушли в дубль, и два оператора из трёх не проверялись вовсе.
+        params = case.to_params()
+        return await run_scan(params, params.operators[0], self.db_path)
 
     def start(self) -> bool:
         """Запустить цикл. False — уже работает."""
