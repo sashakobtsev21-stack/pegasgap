@@ -49,6 +49,7 @@ from pegasgap.models import (
 )
 from pegasgap.names import operator_matches
 from pegasgap.providers.base import register_provider
+from pegasgap.proxies import is_blocked, pool
 
 log = logging.getLogger("pegasgap.providers.sletat_api")
 
@@ -241,9 +242,13 @@ class SletatApiProvider:
     async def search(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
+        # Один прокси на весь поиск: шлюз держит результат за requestId, и опрос
+        # состояния с другого адреса рискует не найти свой же поиск.
+        proxy = pool().acquire()
         try:
             async with httpx.AsyncClient(timeout=self.timeout_ms / 1000,
-                                         headers={"Referer": REFERER}) as client:
+                                         headers={"Referer": REFERER},
+                                         proxy=proxy.url if proxy else None) as client:
                 city_id = await self._resolve_city(client, params.departure_city)
                 country_id = await self._resolve_country(client, city_id,
                                                          params.destination_country)
@@ -256,8 +261,11 @@ class SletatApiProvider:
         except NotApplicableError as exc:
             return self._fail(params, start, str(exc))
         except httpx.HTTPError as exc:
+            pool().penalise(proxy)
             return self._fail(params, start, f"Сеть/шлюз: {type(exc).__name__}: {exc}")
         except SletatApiError as exc:
+            if is_blocked(str(exc)):
+                pool().penalise(proxy)
             return self._fail(params, start, str(exc))
 
         dur = time.monotonic() - start

@@ -52,6 +52,7 @@ from pegasgap.models import (
 )
 from pegasgap.names import operator_matches
 from pegasgap.providers.base import register_provider
+from pegasgap.proxies import is_blocked, pool
 
 log = logging.getLogger("pegasgap.providers.tourvisor_api")
 
@@ -233,10 +234,15 @@ class TourvisorApiProvider:
     async def search(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
+        # Прокси берётся ОДИН на весь поиск: постраничный сбор ходит по одному requestid,
+        # и витрина связывает его с адресом — сменить IP на середине значит получить
+        # чужую страницу.
+        proxy = pool().acquire()
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout_ms / 1000,
                 headers={"Referer": REFERER, "User-Agent": DESKTOP_UA},
+                proxy=proxy.url if proxy else None,
             ) as client:
                 lists = await self._reference(client)
                 city_id = _find_id(_items(lists, "departures", "departure"),
@@ -259,8 +265,13 @@ class TourvisorApiProvider:
         except NotApplicableError as exc:
             return self._fail(params, start, str(exc))
         except httpx.HTTPError as exc:
+            # Сетевой отказ через прокси — чаще всего мёртвый прокси, а не мёртвая
+            # площадка. Отправляем адрес остывать, чтобы следующий кейс взял другой.
+            pool().penalise(proxy)
             return self._fail(params, start, f"Сеть/эндпоинт: {type(exc).__name__}: {exc}")
         except TourvisorApiError as exc:
+            if is_blocked(str(exc)):
+                pool().penalise(proxy)
             return self._fail(params, start, str(exc))
 
         dur = time.monotonic() - start

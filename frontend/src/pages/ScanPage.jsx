@@ -202,6 +202,7 @@ function FullScan() {
   const { state: liveState } = useEventStream();
   const [worker, setWorker] = useState(null);
   const [queue, setQueue] = useState(null);
+  const [proxies, setProxies] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
@@ -209,6 +210,7 @@ function FullScan() {
   const reload = () => {
     getJson("/api/worker").then(setWorker).catch(() => {});
     getJson("/api/queue?limit=500").then(setQueue).catch(() => {});
+    getJson("/api/proxies").then(setProxies).catch(() => {});
   };
   useEffect(reload, []);
 
@@ -258,6 +260,18 @@ function FullScan() {
         <Stat label="Проверено" value={stats.checked ?? "—"} />
         <Stat label="Осталось" value={stats.pending ?? "—"} />
       </div>
+
+      {/* Прокси — не украшение: без них обход встаёт на первом десятке кейсов, обе
+          площадки режут по IP. Пустой пул надо видеть до запуска, а не по логам. */}
+      <p className="mb-4 text-xs text-muted">
+        {proxies?.total
+          ? <>Прокси: <b className="text-ink">{proxies.available}</b> годных из {proxies.total}
+              {proxies.cooling ? `, ${proxies.cooling} остывают` : ""}</>
+          : <span className="text-amber-300">
+              Прокси не настроены — обход встанет на первом десятке кейсов. Вставьте список
+              в <code>proxies.txt</code> (формат — в <code>proxies.example.txt</code>).
+            </span>}
+      </p>
 
       <div className="flex flex-wrap gap-2">
         <button

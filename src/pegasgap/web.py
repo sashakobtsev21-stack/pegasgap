@@ -41,6 +41,7 @@ from pegasgap.models import (
     SearchParams,
 )
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
+from pegasgap.proxies import pool, reload_pool
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 from pegasgap.worker import Worker
 
@@ -379,6 +380,18 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
 
     def sse(payload: dict) -> str:
         return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+    @app.get("/api/proxies")
+    async def proxies_state() -> dict:
+        """Сколько прокси в пуле и сколько сейчас годны. Адреса наружу не отдаём."""
+        return pool().stats()
+
+    @app.post("/api/proxies/reload")
+    async def proxies_reload() -> dict:
+        """Перечитать файл — чтобы добавить прокси не перезапуская сервер."""
+        stats = reload_pool().stats()
+        log.info("пул прокси перечитан: %s", stats)
+        return stats
 
     @app.get("/api/worker")
     async def worker_state() -> dict:
