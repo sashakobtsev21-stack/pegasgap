@@ -217,3 +217,23 @@ def test_unfinished_search_is_reported_as_truncated():
     poll = inspect.getsource(SletatApiProvider._await_completion)
     assert "return states, True" in poll      # дождались
     assert "return states, False" in poll     # вышло время
+
+
+def test_operator_disabled_on_a_direction_is_a_fact_not_a_breakage():
+    """Живой обход: по Мальдивам Pegas у нас `Enabled=False`, а витрина показывает по нему
+    387 отелей. Это самая ценная находка из возможных — оператор отключён там, где
+    торгует. Раньше она схлопывалась в «фильтр не применился, данные непригодны», и
+    шестьдесят четыре прогона уходили в мусор."""
+    import inspect
+
+    from pegasgap.providers.sletat_api import SletatApiProvider
+    off = inspect.getsource(SletatApiProvider._operator_off)
+    # Ответ состоялся: это определённый ответ площадки, а не наша неудача.
+    assert "success=True" in off
+    # Фильтровать было нечего — чужой выдаче взяться неоткуда, портиться нечему.
+    assert "operator_filter_verified=True" in off
+    # Оператор попадает в «туров нет», то есть прогон даёт полный пропуск.
+    assert "operators_no_tours=[operator]" in off
+
+    resolve = inspect.getsource(SletatApiProvider._resolve_operator)
+    assert '"disabled"' in resolve and '"missing"' in resolve

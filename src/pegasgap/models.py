@@ -218,6 +218,9 @@ class ProviderResult(BaseModel):
     operators_not_responding: list[str] = Field(default_factory=list)
     operators_available: list[str] = Field(default_factory=list)
     error: str | None = None
+    # Пояснение к состоявшемуся ответу — не ошибка. Например «оператор отключён на
+    # направлении»: поиск не выполнялся, но это определённый факт, а не сбой.
+    note: str | None = None
     screenshot_path: str | None = None
     search_url: str | None = None
     unsupported_filters: list[str] = Field(default_factory=list)

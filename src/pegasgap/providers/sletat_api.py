@@ -268,7 +268,13 @@ class SletatApiProvider:
                 city_id = await self._resolve_city(client, params.departure_city)
                 country_id = await self._resolve_country(client, city_id,
                                                          params.destination_country)
-                operator_id = await self._resolve_operator(client, country_id, operator)
+                operator_id, state = await self._resolve_operator(
+                    client, country_id, operator)
+                if state in ("disabled", "missing"):
+                    # Искать нечего и незачем: справочник направления прямо говорит, что
+                    # оператора здесь нет. Возвращаем это фактом, а не пустым поиском —
+                    # иначе «туров нет» будет неотличимо от «мы не смогли проверить».
+                    return self._operator_off(params, start, operator, state)
                 request_id = await self._start_search(
                     client, params, city_id, country_id, operator_id)
                 states, finished = await self._await_completion(client, request_id)
@@ -307,6 +313,26 @@ class SletatApiProvider:
             # проверяется по имени оператора в каждой строке.
             operator_filter_verified=operator_id is not None,
             truncated=truncated,
+        )
+
+    def _operator_off(self, params: SearchParams, start: float, operator: str,
+                      state: str) -> ProviderResult:
+        """Оператор отключён или отсутствует на направлении — состоявшийся ответ.
+
+        `success=True` намеренно: мы получили определённый ответ площадки, а не потерпели
+        неудачу. И `operator_filter_verified=True` — фильтровать было нечего, никакой
+        чужой выдачи в результат не попало, портиться нечему.
+        """
+        reason = ("оператор отключён на этом направлении" if state == "disabled"
+                  else "оператора нет в списке направления")
+        log.info("Слетать (шлюз): «%s» — %s", operator, reason)
+        return ProviderResult(
+            provider=self.name, success=True,
+            duration_seconds=time.monotonic() - start,
+            search_mode=params.search_mode,
+            operators_no_tours=[operator],
+            operator_filter_verified=True,
+            note=f"{operator}: {reason} — поиск не выполнялся",
         )
 
     def _fail(self, params: SearchParams, start: float, error: str) -> ProviderResult:
@@ -360,22 +386,29 @@ class SletatApiProvider:
         return found
 
     async def _resolve_operator(self, client: httpx.AsyncClient, country_id: int,
-                                operator: str) -> int | None:
-        """ID оператора для серверного фильтра. None = ищем без фильтра по ТО."""
+                                operator: str) -> tuple[int | None, str]:
+        """(ID оператора для серверного фильтра, состояние).
+
+        Состояние важнее идентификатора. Оператор бывает **отключён на направлении**
+        (`Enabled=False`) — и это не сбой сбора, а факт нашей стороны: у нас его тут
+        просто нет в продаже. Раньше такой случай схлопывался в «фильтр не применился,
+        данные непригодны», и прогон выбрасывался целиком — а это самая ценная находка
+        из возможных. Живой обход: по Мальдивам Pegas отключён, при том что витрина
+        показывает по нему 387 отелей; шестьдесят четыре прогона ушли в мусор.
+        """
         if not operator:
-            return None
+            return None, "no_filter"
         data = await self._call(client, "GetTourOperators", countryId=country_id)
         if not isinstance(data, list):
-            return None
-        # Отключённые операторы (`Enabled=False`) фильтр примет, но выдача будет пуста —
-        # это выглядело бы как пропуск. Берём только включённых.
-        enabled = [o for o in data if o.get("Enabled")]
-        for item in enabled:
-            if operator_matches(str(item.get("Name") or ""), operator):
-                return _to_int(item.get("Id"))
-        log.warning("Слетать (шлюз): оператор «%s» не найден среди включённых — "
-                    "ищем без фильтра по ТО", operator)
-        return None
+            return None, "no_filter"
+
+        found = [o for o in data if operator_matches(str(o.get("Name") or ""), operator)]
+        for item in found:
+            if item.get("Enabled"):
+                return _to_int(item.get("Id")), "ok"
+        if found:
+            return None, "disabled"
+        return None, "missing"
 
     def _query(self, params: SearchParams, city_id: int, country_id: int,
                operator_id: int | None) -> dict[str, Any]:

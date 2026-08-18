@@ -127,6 +127,11 @@ def _collect_problems(
     problems: list[str] = []
     notes: list[str] = []
 
+    # Пояснения площадок к состоявшемуся ответу — контекст, а не поломка.
+    for role, res in (("эталон", reference), ("проверяемая", checked)):
+        if res is not None and res.note:
+            notes.append(f"{role}: {res.note}")
+
     if reference is None:
         problems.append("эталон: результата нет")
     elif not reference.success and not is_not_applicable_error(reference.error):
