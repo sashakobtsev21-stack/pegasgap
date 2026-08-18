@@ -8,7 +8,7 @@
 from datetime import date
 from decimal import Decimal
 
-from pegasgap.gaps import detect, operator_status
+from pegasgap.gaps import MATCH_COLLAPSE_MARKER, detect, operator_status
 from pegasgap.models import (
     PEGAS,
     GapKind,
@@ -221,7 +221,7 @@ def test_collapsed_matching_marks_run_untrustworthy():
     chk = result("sletat", [hotel("Hotel Number 1", "100000", "sletat")])
     scan = detect(PARAMS, ref, chk)
     assert not scan.trustworthy
-    assert any("матчинга" in p for p in scan.problems)
+    assert any(MATCH_COLLAPSE_MARKER in p for p in scan.problems)
 
 
 def test_clean_run_is_trustworthy():

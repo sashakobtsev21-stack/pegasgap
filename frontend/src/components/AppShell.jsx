@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { m } from "framer-motion";
-import { History, Radar, ScrollText, Search } from "lucide-react";
+import { History, Loader2, Radar, ScrollText, Search, Square } from "lucide-react";
 import { fadeUp } from "../lib/animations.js";
+import { postJson } from "../lib/api.js";
+import { useEventStream } from "../lib/stream.js";
 
 /**
  * AppShell — каркас всех экранов: анимированный фон и липкая шапка с навигацией.
@@ -52,7 +55,9 @@ export default function AppShell({ route = "/", children }) {
               </span>
             </div>
           </a>
-          <nav className="ml-auto flex items-center gap-1 text-sm font-semibold text-muted">
+          <div className="ml-auto flex items-center gap-1">
+          <StopButton />
+          <nav className="flex items-center gap-1 text-sm font-semibold text-muted">
             {NAV.map(({ label, href, icon: Icon, match }) => (
               <a
                 key={label}
@@ -67,10 +72,52 @@ export default function AppShell({ route = "/", children }) {
               </a>
             ))}
           </nav>
+          </div>
         </div>
       </m.header>
 
       <main className="mx-auto max-w-[1800px] px-4 py-6 md:px-6">{children}</main>
     </div>
+  );
+}
+
+/**
+ * Остановка обхода из любого экрана — живёт в шапке, а не только на «Проверке».
+ *
+ * Смотреть на то, как обход идёт не туда, чаще всего приходится с «Логов» или
+ * «Мониторинга», и уходить оттуда на другую вкладку ради одной кнопки — ровно та заминка,
+ * когда успевает пройти ещё пяток ненужных кейсов. Кнопка появляется только во время
+ * работы: постоянная «Стоп» при остановленном воркере — мусор в шапке.
+ *
+ * Показывается по состоянию из живого потока, так что остановка с другой вкладки или из
+ * CLI уберёт её сама, без перезагрузки страницы.
+ */
+function StopButton() {
+  const { state } = useEventStream();
+  const [busy, setBusy] = useState(false);
+
+  if (!state?.running) return null;
+
+  async function stop() {
+    setBusy(true);
+    try {
+      await postJson("/api/worker/stop", {}, { timeoutMs: 120_000 });
+    } catch {
+      // Молча: воркер мог остановиться сам, и ругаться в шапке не на что.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={stop}
+      disabled={busy}
+      title="Остановить обход — текущий кейс доработает до конца"
+      className="ml-auto mr-1 flex items-center gap-1.5 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-200 transition-colors hover:bg-rose-500/20 disabled:opacity-60"
+    >
+      {busy ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-3.5 fill-current" />}
+      <span className="hidden sm:inline">{busy ? "Останавливаю…" : "Стоп"}</span>
+    </button>
   );
 }

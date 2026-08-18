@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from pegasgap.catalog import CatalogHotel
 from pegasgap.diagnosis import CatalogIndex, diagnose, diagnose_gap
+from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import LinkSet
 from pegasgap.models import (
     GapKind,
@@ -199,7 +200,9 @@ def test_note_complements_the_verdict_instead_of_repeating_it():
 
 # ------------------------- опровержение вердикта о матчинге -------------------------
 
-COLLAPSE = "сопоставлено лишь 4% отелей эталона — похоже на сбой матчинга, а не на реальные пропуски"
+# Берём метку из кода, а не переписываем текст: формулировку правят, и тест,
+# прибитый к ней буквально, ломается на ровном месте.
+COLLAPSE = f"{MATCH_COLLAPSE_MARKER}: из показанных эталоном узнали лишь 4%"
 
 
 def test_catalog_refutes_the_match_collapse_verdict():
@@ -213,7 +216,7 @@ def test_catalog_refutes_the_match_collapse_verdict():
     diagnose(scan, CATALOG, NO_DB)
 
     assert scan.trustworthy
-    assert not any("сбой матчинга" in p for p in scan.problems)
+    assert not any(MATCH_COLLAPSE_MARKER in p for p in scan.problems)
     assert any("уверенно нашлись в справочнике" in n for n in scan.notes)
 
 
@@ -226,7 +229,7 @@ def test_verdict_survives_when_the_catalog_agrees_it_is_broken():
     diagnose(scan, CATALOG, NO_DB)
 
     assert not scan.trustworthy
-    assert any("сбой матчинга" in p for p in scan.problems)
+    assert any(MATCH_COLLAPSE_MARKER in p for p in scan.problems)
 
 
 def test_refutation_clears_only_its_own_verdict():
