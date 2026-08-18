@@ -1,5 +1,5 @@
 import { m } from "framer-motion";
-import { History, Radar, Search } from "lucide-react";
+import { History, Radar, ScrollText, Search } from "lucide-react";
 import { fadeUp } from "../lib/animations.js";
 
 /**
@@ -13,7 +13,13 @@ const NAV = [
     icon: Search,
     match: (p) => p === "/" || p.startsWith("/run"),
   },
-  { label: "Обход", href: "#/sweep", icon: Radar, match: (p) => p.startsWith("/sweep") },
+  {
+    label: "Мониторинг",
+    href: "#/monitor",
+    icon: Radar,
+    match: (p) => p.startsWith("/monitor") || p.startsWith("/sweep"),
+  },
+  { label: "Логи", href: "#/logs", icon: ScrollText, match: (p) => p.startsWith("/logs") },
   { label: "История", href: "#/history", icon: History, match: (p) => p.startsWith("/history") },
 ];
 

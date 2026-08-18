@@ -31,6 +31,19 @@ class Window:
 
 
 @dataclass
+class Pax:
+    """Состав туристов одного кейса."""
+
+    adults: int = 2
+    children: list[int] = field(default_factory=list)
+
+    @property
+    def label(self) -> str:
+        kids = f" + {len(self.children)} реб." if self.children else ""
+        return f"{self.adults} взр.{kids}"
+
+
+@dataclass
 class Matrix:
     """Разобранный файл сценариев."""
 
@@ -44,6 +57,10 @@ class Matrix:
     routes: list[tuple[str, str]] = field(default_factory=list)
     modes: list[str] = field(default_factory=lambda: ["tours"])
     windows: list[Window] = field(default_factory=list)
+    # Составы туристов. Это измерение кейса, а не глобальная настройка: «двое взрослых»
+    # и «трое взрослых с ребёнком двенадцати лет» — разные поиски с разной выдачей, и
+    # находка по одному ничего не говорит о другом.
+    pax: list[Pax] = field(default_factory=lambda: [Pax()])
     adults: int = 2
     nights_min: int = 7
     nights_max: int = 7
@@ -63,18 +80,20 @@ class Matrix:
         for city, country in self.pairs():
             for mode in self.modes:
                 for window in self.windows:
-                    date_from, date_to = window.dates(today)
-                    out.append(SearchParams(
-                        departure_city=city,
-                        destination_country=country,
-                        date_from=date_from,
-                        date_to=date_to,
-                        nights_min=self.nights_min,
-                        nights_max=self.nights_max,
-                        adults=self.adults,
-                        search_mode=mode,  # type: ignore[arg-type]
-                        operators=[self.operator],
-                    ))
+                    for pax in self.pax:
+                        date_from, date_to = window.dates(today)
+                        out.append(SearchParams(
+                            departure_city=city,
+                            destination_country=country,
+                            date_from=date_from,
+                            date_to=date_to,
+                            nights_min=self.nights_min,
+                            nights_max=self.nights_max,
+                            adults=pax.adults,
+                            children_ages=list(pax.children),
+                            search_mode=mode,  # type: ignore[arg-type]
+                            operators=[self.operator],
+                        ))
         return out
 
 
@@ -99,6 +118,9 @@ def load_matrix(path: Path | str = DEFAULT_CONFIG) -> Matrix:
         countries=list(raw.get("countries") or []),
         routes=routes,
         modes=list(defaults.get("modes") or ["tours"]),
+        pax=[Pax(adults=int(p.get("adults") or 2),
+                 children=[int(a) for a in (p.get("children") or [])])
+             for p in (defaults.get("pax") or [{}])],
         adults=int(defaults.get("adults") or 2),
         nights_min=int(defaults.get("nights_min") or 7),
         nights_max=int(defaults.get("nights_max") or defaults.get("nights_min") or 7),

@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pegasgap.models import GapKind, HotelGap, ScanResult
+from pegasgap.queue import SCHEMA as QUEUE_SCHEMA
 
 DEFAULT_DB = Path("pegasgap.db")
 
@@ -61,7 +62,12 @@ CREATE TABLE IF NOT EXISTS gaps (
     note            TEXT    NOT NULL DEFAULT '',
     diagnosis       TEXT    NOT NULL DEFAULT 'unknown',
     catalog_id      INTEGER,
-    catalog_name    TEXT
+    catalog_name    TEXT,
+    -- Триаж: находку кто-то посмотрел и закрыл вопрос. Отдельно от самой находки,
+    -- потому что это состояние РАЗБОРА, а не результата проверки: перепроверка
+    -- направления не должна сбрасывать то, что человек уже отсмотрел.
+    reviewed        INTEGER NOT NULL DEFAULT 0,
+    reviewed_at     TEXT
 );
 
 -- Возраст находки: когда впервые увидели и сколько прогонов подряд она держится.
@@ -92,6 +98,8 @@ _MIGRATIONS = {
         "diagnosis": "TEXT NOT NULL DEFAULT 'unknown'",
         "catalog_id": "INTEGER",
         "catalog_name": "TEXT",
+        "reviewed": "INTEGER NOT NULL DEFAULT 0",
+        "reviewed_at": "TEXT",
     },
 }
 
@@ -110,6 +118,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
+    conn.executescript(QUEUE_SCHEMA)
     _migrate(conn)
     return conn
 
@@ -246,3 +255,47 @@ def gaps_of_run(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM gaps WHERE run_id = ? ORDER BY kind, hotel_name", (run_id,)
     ).fetchall()
+
+
+def set_reviewed(conn: sqlite3.Connection, gap_id: int, reviewed: bool = True) -> bool:
+    """Отметить находку разобранной. False — такой находки нет."""
+    cur = conn.execute(
+        "UPDATE gaps SET reviewed = ?, reviewed_at = ? WHERE id = ?",
+        (int(reviewed),
+         datetime.now().isoformat(timespec="seconds") if reviewed else None,
+         gap_id),
+    )
+    return bool(cur.rowcount)
+
+
+def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
+             limit: int = 500) -> list[sqlite3.Row]:
+    """Находки за период вместе с параметрами прогона — то, что показывает отчёт.
+
+    Недостоверные прогоны исключены: их находки нельзя ни разбирать, ни считать.
+    """
+    return conn.execute(
+        f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
+                   r.date_from AS run_date_from, r.date_to AS run_date_to,
+                   r.search_mode, r.params_json
+              FROM gaps g JOIN runs r ON r.id = g.run_id
+             WHERE r.run_at >= ? AND r.trustworthy = 1
+                   {"AND g.reviewed = 0" if only_open else ""}
+             ORDER BY g.reviewed ASC, r.run_at DESC
+             LIMIT ?""",
+        (since.isoformat(timespec="seconds"), limit),
+    ).fetchall()
+
+
+def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
+    """Счётчики для шапки: сколько найдено и сколько из этого уже разобрано."""
+    row = conn.execute(
+        """SELECT COUNT(*) AS total,
+                  SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed
+             FROM gaps g JOIN runs r ON r.id = g.run_id
+            WHERE r.run_at >= ? AND r.trustworthy = 1""",
+        (since.isoformat(timespec="seconds"),),
+    ).fetchone()
+    total = row["total"] or 0
+    reviewed = row["reviewed"] or 0
+    return {"total": total, "reviewed": reviewed, "open": total - reviewed}

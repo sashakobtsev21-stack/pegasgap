@@ -22,13 +22,15 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from pegasgap import queue as case_queue
 from pegasgap import storage
 from pegasgap.catalog import fetch_catalog, resolve_country_id
 from pegasgap.diagnosis import diagnose
+from pegasgap.events import bus
 from pegasgap.gaps import detect
 from pegasgap.linking import load_links
 from pegasgap.models import (
@@ -40,6 +42,7 @@ from pegasgap.models import (
 )
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
+from pegasgap.worker import Worker
 
 log = logging.getLogger("pegasgap.web")
 
@@ -351,6 +354,137 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
 
         sweep.task = asyncio.create_task(worker())
         return {"started": True, "total": sweep.total}
+
+    worker = Worker(db_path=db_path, operator=operator)
+
+    def sse(payload: dict) -> str:
+        return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+    @app.get("/api/worker")
+    async def worker_state() -> dict:
+        return worker.snapshot()
+
+    @app.post("/api/worker/start")
+    async def worker_start() -> dict:
+        if not worker.start():
+            raise HTTPException(409, "воркер уже работает")
+        return worker.snapshot()
+
+    @app.post("/api/worker/stop")
+    async def worker_stop() -> dict:
+        await worker.stop()
+        return worker.snapshot()
+
+    @app.get("/api/stream")
+    async def stream() -> StreamingResponse:
+        """Живой поток событий: строки лога и находки по мере появления.
+
+        Опрос состояния отвечает на вопрос «сколько сделано», но не на «что происходит».
+        Для процесса, который работает часами, второе важнее: если он молчит десять
+        минут, надо видеть, ждёт он площадку или упёрся в квоту.
+        """
+        async def events():
+            queue = bus.subscribe()
+            try:
+                # Хвост лога сразу: подключившийся в середине прогона должен увидеть
+                # контекст, а не пустой экран.
+                for event in bus.history():
+                    yield sse(event)
+                yield sse({"kind": "state", **worker.snapshot()})
+                while True:
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=20)
+                    except TimeoutError:
+                        # Пульс: держит соединение живым через прокси, которые рвут
+                        # простаивающие потоки.
+                        yield ": ping\n\n"
+                        continue
+                    yield sse(event)
+            finally:
+                bus.unsubscribe(queue)
+
+        return StreamingResponse(events(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # nginx не должен буферизовать поток
+        })
+
+    @app.get("/api/queue")
+    async def queue_list(limit: int = 200) -> dict:
+        with storage.session(db_path) as conn:
+            cases = case_queue.list_cases(conn, limit=limit)
+            return {
+                "stats": case_queue.stats(conn),
+                "cases": [
+                    {
+                        "id": c.id, "title": c.title,
+                        "departure_city": c.departure_city, "country": c.country,
+                        "search_mode": c.search_mode,
+                        "date_from": c.date_from.isoformat(),
+                        "date_to": c.date_to.isoformat(),
+                        "adults": c.adults, "children_ages": c.children_ages,
+                        "priority": c.priority,
+                        "last_checked": (c.last_checked.isoformat()
+                                         if c.last_checked else None),
+                        "checks": c.checks, "gaps_found": c.gaps_found,
+                    }
+                    for c in cases
+                ],
+            }
+
+    @app.post("/api/queue/seed")
+    async def queue_seed() -> dict:
+        """Пересобрать очередь из scenarios.yaml.
+
+        Существующие кейсы не дублируются и не теряют историю проверок — обновляется
+        только приоритет.
+        """
+        try:
+            matrix = load_matrix(config_path)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        with storage.session(db_path) as conn:
+            seeded = case_queue.seed_from_matrix(conn, matrix)
+            queue_stats = case_queue.stats(conn)
+        bus.log(f"Очередь пересобрана из конфига: {seeded} кейсов")
+        return {"seeded": seeded, "stats": queue_stats}
+
+    @app.get("/api/findings")
+    async def findings(days: int = 7, only_open: bool = False, limit: int = 500) -> dict:
+        since = datetime.now() - timedelta(days=max(1, days))
+        with storage.session(db_path) as conn:
+            rows = storage.findings(conn, since, only_open=only_open, limit=limit)
+            summary = storage.findings_summary(conn, since)
+            queue_stats = case_queue.stats(conn)
+        return {
+            "summary": {**summary, "queue": queue_stats},
+            "findings": [
+                {
+                    "id": r["id"], "run_id": r["run_id"], "run_at": r["run_at"],
+                    "departure_city": r["departure_city"],
+                    "country": r["destination_country"],
+                    "search_mode": r["search_mode"],
+                    "date_from": r["run_date_from"], "date_to": r["run_date_to"],
+                    "params": json.loads(r["params_json"]),
+                    "kind": r["kind"],
+                    "kind_title": GapKind(r["kind"]).title,
+                    "hotel_name": r["hotel_name"], "stars": r["stars"],
+                    "diagnosis_title": (
+                        HotelDiagnosis(r["diagnosis"]).title
+                        if r["diagnosis"] != HotelDiagnosis.UNKNOWN.value else None),
+                    "note": r["note"],
+                    "reviewed": bool(r["reviewed"]),
+                    "reviewed_at": r["reviewed_at"],
+                }
+                for r in rows
+            ],
+        }
+
+    @app.post("/api/findings/{gap_id}/review")
+    async def review(gap_id: int, reviewed: bool = True) -> dict:
+        with storage.session(db_path) as conn:
+            if not storage.set_reviewed(conn, gap_id, reviewed):
+                raise HTTPException(404, f"находка #{gap_id} не найдена")
+        return {"id": gap_id, "reviewed": reviewed}
 
     # Собранный дашборд. Раздаём под /app, корень редиректит туда — чтобы у пользователя
     # был один адрес, который «просто открывается».
