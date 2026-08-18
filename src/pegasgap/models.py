@@ -264,12 +264,14 @@ class GapKind(StrEnum):
 
     @property
     def title(self) -> str:
+        # Названия говорят, ЧТО случилось, а не как это устроено внутри. «Отельный
+        # пропуск» понятно только автору: читателю отчёта нужно «туров нет».
         return {
-            GapKind.FULL: "Полный пропуск",
+            GapKind.FULL: "Туров нет совсем",
             GapKind.NOT_RESPONDING: "Оператор не ответил",
-            GapKind.HOTEL: "Отельный пропуск",
-            GapKind.PRICE: "Расхождение цены",
-            GapKind.REVERSE: "Обратный пропуск",
+            GapKind.HOTEL: "Туров нет по отелю",
+            GapKind.PRICE: "Цена расходится",
+            GapKind.REVERSE: "Есть только у нас",
         }[self]
 
     @property
@@ -314,6 +316,26 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "есть в справочнике",
             HotelDiagnosis.UNCERTAIN: "не опознан",
             HotelDiagnosis.UNKNOWN: "не проверялось",
+        }[self]
+
+    @property
+    def cause(self) -> str:
+        """Вероятная причина словами — то, что читают в отчёте вместо ярлыка.
+
+        Ярлык вроде «есть в справочнике» понятен тому, кто знает устройство разбора;
+        человеку, открывшему отчёт, нужна фраза, из которой сразу видно, что случилось
+        и куда идти.
+        """
+        return {
+            HotelDiagnosis.NOT_IN_CATALOG: "отеля нет в справочнике Слетать — не заведён",
+            HotelDiagnosis.NOT_LINKED: "отель в справочнике есть, но не связан с каталогом "
+                                       "оператора",
+            HotelDiagnosis.LINKED_NO_OFFER: "справочники в порядке — значит у оператора нет "
+                                            "наличия либо поиск до него не дошёл",
+            HotelDiagnosis.IN_CATALOG_UNCHECKED: "отель в справочнике есть; вероятнее всего "
+                                                 "нет линковки с каталогом оператора",
+            HotelDiagnosis.UNCERTAIN: "возможно, отель у нас есть под другим названием",
+            HotelDiagnosis.UNKNOWN: "причина не разобрана — не было доступа к справочникам",
         }[self]
 
     @property

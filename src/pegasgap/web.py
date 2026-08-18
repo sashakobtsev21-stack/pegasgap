@@ -43,6 +43,7 @@ from pegasgap.models import (
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.proxies import pool, reload_pool
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
+from pegasgap.searchlink import search_url_from_row
 from pegasgap.worker import Worker
 
 log = logging.getLogger("pegasgap.web")
@@ -444,11 +445,17 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
 
     @app.get("/api/queue")
     async def queue_list(limit: int = 200) -> dict:
+        """Сводка очереди. `limit=0` — без поимённого списка кейсов.
+
+        Дашборду список не нужен: кейсов тысячи, и он показывает сводку по маршрутам.
+        Поимённый перечень остаётся для отладки и внешних запросов.
+        """
         with storage.session(db_path) as conn:
-            cases = case_queue.list_cases(conn, limit=limit)
+            cases = case_queue.list_cases(conn, limit=limit) if limit > 0 else []
             return {
                 "stats": case_queue.stats(conn),
                 "dimensions": case_queue.dimensions(conn),
+                "composition": case_queue.composition(conn),
                 "cases": [
                     {
                         "id": c.id, "title": c.title,
@@ -503,12 +510,29 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     "search_mode": r["search_mode"],
                     "date_from": r["run_date_from"], "date_to": r["run_date_to"],
                     "params": json.loads(r["params_json"]),
+                    # Ссылка на тот же поиск: без неё находка проверяется только
+                    # повторением поиска руками по десятку полей формы.
+                    "search_url": search_url_from_row(json.loads(r["params_json"])),
                     "kind": r["kind"],
                     "kind_title": GapKind(r["kind"]).title,
                     "hotel_name": r["hotel_name"], "stars": r["stars"],
                     "diagnosis_title": (
                         HotelDiagnosis(r["diagnosis"]).title
                         if r["diagnosis"] != HotelDiagnosis.UNKNOWN.value else None),
+                    # Причина словами и что делать — иначе находка требует знания того,
+                    # как устроен разбор, чтобы понять ярлык.
+                    "cause": (HotelDiagnosis(r["diagnosis"]).cause
+                              if r["kind"] == GapKind.HOTEL.value else GapKind(r["kind"]).hint),
+                    "action": (HotelDiagnosis(r["diagnosis"]).action
+                               if r["kind"] == GapKind.HOTEL.value
+                               and r["diagnosis"] != HotelDiagnosis.UNKNOWN.value else None),
+                    # Цены сторон как есть. Проценты без них нечитаемы: «+34.4%» не
+                    # говорит ни сколько стоит тур, ни где он дороже.
+                    "reference_price": (float(r["reference_price"])
+                                        if r["reference_price"] is not None else None),
+                    "checked_price": (float(r["checked_price"])
+                                      if r["checked_price"] is not None else None),
+                    "currency": r["currency"],
                     "note": r["note"],
                     "reviewed": bool(r["reviewed"]),
                     "reviewed_at": r["reviewed_at"],

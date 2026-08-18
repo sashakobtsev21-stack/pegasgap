@@ -295,3 +295,36 @@ def dimensions(conn: sqlite3.Connection) -> dict:
              FROM cases WHERE enabled = 1"""
     ).fetchone()
     return dict(row) if row else {}
+
+
+def composition(conn: sqlite3.Connection) -> list[dict]:
+    """Очередь сводкой: оператор → маршруты с числом кейсов и сколько из них пройдено.
+
+    Списком кейсы читать бессмысленно: их тысячи, и подряд идут почти одинаковые строки,
+    различающиеся датой. Человеку нужно другое — «по Sunmar 1320 кейсов, из них
+    Москва → Турция 24». Даты внутри маршрута сворачиваются в число: конкретное окно
+    видно в отчёте по находке, а здесь важен объём работы.
+    """
+    rows = conn.execute(
+        """SELECT operator, departure_city, country,
+                  COUNT(*)                                        AS cases,
+                  SUM(CASE WHEN last_checked IS NOT NULL THEN 1 ELSE 0 END) AS checked
+             FROM cases
+            WHERE enabled = 1
+            GROUP BY operator, departure_city, country
+            ORDER BY operator, cases DESC, departure_city, country"""
+    ).fetchall()
+
+    by_operator: dict[str, dict] = {}
+    for row in rows:
+        block = by_operator.setdefault(row["operator"], {
+            "operator": row["operator"], "cases": 0, "checked": 0, "routes": [],
+        })
+        block["cases"] += row["cases"]
+        block["checked"] += row["checked"] or 0
+        block["routes"].append({
+            "route": f'{row["departure_city"]} → {row["country"]}',
+            "cases": row["cases"],
+            "checked": row["checked"] or 0,
+        })
+    return list(by_operator.values())

@@ -12,6 +12,7 @@ import { getJson, postJson } from "../lib/api.js";
 import { COUNTRIES, DEPARTURE_CITIES } from "../lib/constants.js";
 import { formatDate } from "../lib/format.js";
 import { navigate } from "../lib/router.js";
+import { plural } from "../lib/grouping.js";
 import { useEventStream } from "../lib/stream.js";
 
 /** ISO-дата через N дней от сегодня — дефолты формы должны быть в будущем. */
@@ -209,7 +210,7 @@ function FullScan() {
 
   const reload = () => {
     getJson("/api/worker").then(setWorker).catch(() => {});
-    getJson("/api/queue?limit=300").then(setQueue).catch(() => {});
+    getJson("/api/queue?limit=0").then(setQueue).catch(() => {});
     getJson("/api/proxies").then(setProxies).catch(() => {});
   };
   useEffect(reload, []);
@@ -320,37 +321,31 @@ function FullScan() {
         </p>
       )}
 
-      {queue?.cases?.length > 0 && (
-        <details className="mt-4">
-          {/* Раньше здесь стояло просто число показанных строк, и «500» читалось как
-              размер очереди, хотя в ней четыре тысячи кейсов. Тихая обрезка — тот же
-              дефект, что был в отчёте: скрытое неотличимо от отсутствующего. */}
+      {/* Сводкой, а не списком: кейсов тысячи, и подряд идут почти одинаковые строки,
+          различающиеся датой. Нужен объём работы по маршрутам, а не перечисление. */}
+      {queue?.composition?.map((block) => (
+        <details key={block.operator} className="mt-3">
           <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">
-            Что в очереди · показаны первые {queue.cases.length} из {stats.total ?? "—"}
+            {block.operator} · {block.cases} кейсов
+            <span className="ml-2 text-[11px] font-normal">
+              пройдено {block.checked}
+            </span>
           </summary>
-          <div className="mt-2 max-h-72 overflow-y-auto">
-            <table className="w-full text-sm">
-              <tbody>
-                {queue.cases.map((c) => (
-                  <tr key={c.id} className="border-b border-white/5">
-                    <td className="py-1.5 pr-3 text-ink">
-                      <span className="text-[11px] text-muted">{c.operator}</span>{" "}
-                      {c.departure_city} → {c.country}
-                    </td>
-                    <td className="py-1.5 pr-3 text-[11px] text-muted">
-                      {formatDate(c.date_from)}–{formatDate(c.date_to)} ·{" "}
-                      {c.search_mode === "hotels" ? "отели" : "туры"}
-                    </td>
-                    <td className="py-1.5 text-right text-[11px] text-muted">
-                      {c.last_checked ? `проверен, находок ${c.gaps_found}` : "не проверялся"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-2 max-h-64 overflow-y-auto pl-3">
+            {block.routes.map((r) => (
+              <div key={r.route}
+                   className="flex items-baseline justify-between border-b border-white/5 py-1 text-sm">
+                <span className="text-ink">{r.route}</span>
+                <span className="text-[11px] tabular-nums text-muted">
+                  {r.cases} {plural(r.cases, "кейс", "кейса", "кейсов")}
+                  {r.checked ? ` · пройдено ${r.checked}` : ""}
+                </span>
+              </div>
+            ))}
           </div>
         </details>
-      )}
+      ))}
+
     </GlassCard>
   );
 }

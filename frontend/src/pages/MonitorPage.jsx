@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { m } from "framer-motion";
-import { CheckCircle2, ChevronDown, ChevronRight, Circle, Loader2, Radar, Wifi, WifiOff }
-  from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, Loader2, Radar,
+  Wifi, WifiOff } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
 import { formatDate, formatShortDateTime } from "../lib/format.js";
@@ -158,7 +158,7 @@ export default function MonitorPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="w-10 py-2 pr-2 font-semibold">✓</th>
@@ -167,6 +167,7 @@ export default function MonitorPage() {
                   <th className="py-2 pr-3 font-semibold">Туристы</th>
                   <th className="py-2 pr-3 font-semibold">Класс</th>
                   <th className="py-2 pr-3 font-semibold">Отель</th>
+                  <th className="py-2 pr-3 font-semibold">Цены</th>
                   <th className="py-2 font-semibold">Причина</th>
                 </tr>
               </thead>
@@ -228,12 +229,29 @@ export default function MonitorPage() {
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-ink">
-                        {g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}
+                        <div>{g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}</div>
+                        {/* Ссылка на тот же поиск: без неё находка проверяется только
+                            повторением поиска руками по десятку полей формы. */}
+                        {g.head.search_url && (
+                          <a href={g.head.search_url} target="_blank" rel="noreferrer"
+                             className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-brand-soft hover:underline">
+                            <ExternalLink className="size-3" /> открыть поиск на Слетать
+                          </a>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                        <Prices f={g.head} />
                       </td>
                       <td className="py-2 text-xs text-muted">
-                        {g.head.diagnosis_title
-                          ? <b className="text-ink">{g.head.diagnosis_title}. </b> : null}
-                        {g.head.note}
+                        <div>{g.head.cause}</div>
+                        {g.head.action && (
+                          <div className="mt-0.5 text-[11px] text-amber-200/80">
+                            → {g.head.action}
+                          </div>
+                        )}
+                        {g.head.note && (
+                          <div className="mt-0.5 text-[11px] opacity-70">{g.head.note}</div>
+                        )}
                       </td>
                     </tr>
 
@@ -249,9 +267,13 @@ export default function MonitorPage() {
                         <td className="py-1.5 pr-3 text-muted">{paxLabel(f)}</td>
                         <td />
                         <td className="py-1.5 pr-3 text-muted">
-                          {formatShortDateTime(f.run_at)}
+                          {f.search_url
+                            ? <a href={f.search_url} target="_blank" rel="noreferrer"
+                                 className="text-brand-soft hover:underline">открыть поиск</a>
+                            : null}
                         </td>
-                        <td className="py-1.5 text-muted">{f.note}</td>
+                        <td className="py-1.5 pr-3"><Prices f={f} /></td>
+                        <td className="py-1.5 text-muted">{formatShortDateTime(f.run_at)}</td>
                       </tr>
                     ))}
                   </Fragment>
@@ -271,6 +293,39 @@ export default function MonitorPage() {
         )}
       </GlassCard>
     </m.div>
+  );
+}
+
+/**
+ * Цены сторон как есть. Проценты сами по себе нечитаемы: «+34.4%» не говорит ни сколько
+ * стоит тур, ни на какой площадке он дороже — а именно это и нужно, чтобы решить,
+ * настоящее это расхождение или разная база цены.
+ */
+function Prices({ f }) {
+  const money = (v) => (v == null ? "—" : `${Math.round(v).toLocaleString("ru-RU")}`);
+  if (f.reference_price == null && f.checked_price == null) return <span className="text-muted">—</span>;
+  const diff = f.reference_price && f.checked_price != null
+    ? (f.checked_price - f.reference_price) / f.reference_price * 100
+    : null;
+  return (
+    <div className="tabular-nums leading-tight">
+      <div className="text-muted">
+        Турвизор <b className="text-ink">{money(f.reference_price)}</b>
+      </div>
+      <div className="text-muted">
+        Слетать{" "}
+        {f.checked_price == null
+          ? <b className="text-rose-300">нет</b>
+          : <b className="text-ink">{money(f.checked_price)}</b>}
+      </div>
+      {diff != null && (
+        <div className={diff > 0 ? "text-amber-300" : "text-emerald-300"}>
+          {diff > 0 ? "у нас дороже" : "у нас дешевле"} на{" "}
+          {money(Math.abs(f.checked_price - f.reference_price))} ({diff > 0 ? "+" : ""}
+          {diff.toFixed(1)}%)
+        </div>
+      )}
+    </div>
   );
 }
 
