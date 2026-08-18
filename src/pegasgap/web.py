@@ -172,6 +172,7 @@ def _run_dict(run: Any, gaps: list[Any]) -> dict:
         "reference_status": run["reference_status"],
         "checked_status": run["checked_status"],
         "reference_hotels": run["reference_hotels"],
+        "checked_hotels": run["checked_hotels"],
         "matched_hotels": run["matched_hotels"],
         "price_offset_pct": run["price_offset_pct"],
         "trustworthy": bool(run["trustworthy"]),

@@ -397,6 +397,9 @@ class ScanResult(BaseModel):
     # Сколько отелей эталона удалось сопоставить — мера доверия к разбору.
     matched_hotels: int = 0
     reference_hotels: int = 0
+    # Размер НАШЕЙ выдачи. Без него неполный ответ шлюза неотличим от
+    # реального пропуска: 42 отеля против обычных 347 выглядят одинаково.
+    checked_hotels: int = 0
 
     @property
     def trustworthy(self) -> bool:

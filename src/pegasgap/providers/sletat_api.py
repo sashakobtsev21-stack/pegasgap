@@ -255,9 +255,12 @@ class SletatApiProvider:
                 operator_id = await self._resolve_operator(client, country_id, operator)
                 request_id = await self._start_search(
                     client, params, city_id, country_id, operator_id)
-                states = await self._await_completion(client, request_id)
-                rows, truncated = await self._fetch_rows(
+                states, finished = await self._await_completion(client, request_id)
+                rows, capped = await self._fetch_rows(
                     client, params, city_id, country_id, operator_id, request_id)
+                # Незавершённый поиск — такая же неполная выдача, как упёршийся в предел
+                # страниц: отель, который не успел прийти, неотличим от отсутствующего.
+                truncated = capped or not finished
         except NotApplicableError as exc:
             return self._fail(params, start, str(exc))
         except httpx.HTTPError as exc:
@@ -392,12 +395,18 @@ class SletatApiProvider:
             raise SletatApiError("GetTours не вернул requestId")
         return request_id
 
-    async def _await_completion(self, client: httpx.AsyncClient, request_id: int) -> list[dict]:
-        """Опрашивать состояние, пока все операторы не завершатся или не выйдет время.
+    async def _await_completion(self, client: httpx.AsyncClient,
+                                request_id: int) -> tuple[list[dict], bool]:
+        """Опрашивать состояние до готовности. Возвращает (состояния, дождались ли).
 
-        По таймауту возвращаем последнее состояние, а не падаем: часть операторов уже
-        ответила, и это осмысленные данные. Незавершённые в находки не попадут —
-        `split_load_state` относит их ни к «туров нет», ни к «не отвечает».
+        Признак завершённости обязан уходить наверх, а не тонуть в предупреждении лога.
+        Раньше по таймауту молча отдавалось последнее состояние, строки тянулись из
+        НЕЗАВЕРШЁННОГО поиска и подавались как полная выдача. Живой обход показал цену
+        ошибки: по Египту наша сторона отдала 42 отеля вместо 347, и девяносто пять
+        отелей эталона превратились в «пропуски», которых нет.
+
+        Частичный результат сам по себе осмыслен (часть операторов уже ответила), поэтому
+        он возвращается — но помеченный, и вызывающий код объявляет выдачу обрезанной.
         """
         deadline = time.monotonic() + POLL_TIMEOUT_S
         states: list[dict] = []
@@ -405,10 +414,10 @@ class SletatApiProvider:
             data = await self._call(client, "GetLoadState", requestId=request_id)
             states = data if isinstance(data, list) else (data.get("Data") or [])
             if states and all(s.get("IsProcessed") or s.get("IsSkipped") for s in states):
-                return states
+                return states, True
             await asyncio.sleep(POLL_INTERVAL_S)
         log.warning("Слетать (шлюз): не все операторы завершились за %.0f с", POLL_TIMEOUT_S)
-        return states
+        return states, False
 
     async def _fetch_rows(self, client: httpx.AsyncClient, params: SearchParams,
                           city_id: int, country_id: int, operator_id: int | None,

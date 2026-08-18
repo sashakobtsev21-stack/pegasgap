@@ -393,4 +393,5 @@ def detect(
             f"Находки по цене не показаны, к остальным относиться с подозрением")
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
+    result.checked_hotels = len(chk_hotels)
     return result

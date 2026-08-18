@@ -197,3 +197,23 @@ def test_rate_limit_is_recognised_as_quota_not_breakage():
         "кол-ва поисковых запросов. Обратитесь в службу поддержки")
     assert not is_rate_limited("поиск не завершился за 45 с")
     assert not is_rate_limited("")
+
+
+def test_unfinished_search_is_reported_as_truncated():
+    """Корень девяноста пяти выдуманных пропусков по Египту.
+
+    Шлюз опрашивался до таймаута и молча отдавал последнее состояние, строки тянулись из
+    НЕЗАВЕРШЁННОГО поиска, а результат подавался как полная выдача. Наша сторона вернула
+    42 отеля вместо обычных 347 — и девяносто пять отелей эталона стали «пропусками».
+    Признак завершённости обязан уходить наверх, а не тонуть в предупреждении лога.
+    """
+    import inspect
+
+    from pegasgap.providers.sletat_api import SletatApiProvider
+    src = inspect.getsource(SletatApiProvider.search)
+    assert "states, finished = await self._await_completion" in src
+    assert "truncated = capped or not finished" in src
+
+    poll = inspect.getsource(SletatApiProvider._await_completion)
+    assert "return states, True" in poll      # дождались
+    assert "return states, False" in poll     # вышло время

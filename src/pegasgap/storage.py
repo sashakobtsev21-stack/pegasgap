@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS runs (
     reference_status    TEXT    NOT NULL,
     checked_status      TEXT    NOT NULL,
     reference_hotels    INTEGER NOT NULL DEFAULT 0,
+    checked_hotels      INTEGER NOT NULL DEFAULT 0,
     matched_hotels      INTEGER NOT NULL DEFAULT 0,
     price_offset_pct    REAL,
     trustworthy         INTEGER NOT NULL,
@@ -93,6 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_gaps_kind     ON gaps(kind);
 _MIGRATIONS = {
     "runs": {
         "notes": "TEXT NOT NULL DEFAULT '[]'",
+        "checked_hotels": "INTEGER NOT NULL DEFAULT 0",
     },
     "gaps": {
         "diagnosis": "TEXT NOT NULL DEFAULT 'unknown'",
@@ -150,15 +152,17 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
             """INSERT INTO runs (
                    run_at, scenario_key, operator, search_mode, departure_city,
                    destination_country, date_from, date_to, reference_status,
-                   checked_status, reference_hotels, matched_hotels, price_offset_pct,
+                   checked_status, reference_hotels, checked_hotels,
+                   matched_hotels, price_offset_pct,
                    trustworthy, problems, notes, unmatched, params_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 scan.run_at.isoformat(timespec="seconds"),
                 p.scenario_key(), scan.operator, p.search_mode, p.departure_city,
                 p.destination_country, p.date_from.isoformat(), p.date_to.isoformat(),
                 scan.reference_status.value, scan.checked_status.value,
-                scan.reference_hotels, scan.matched_hotels, scan.price_offset_pct,
+                scan.reference_hotels, scan.checked_hotels,
+                scan.matched_hotels, scan.price_offset_pct,
                 int(scan.trustworthy),
                 json.dumps(scan.problems, ensure_ascii=False),
                 json.dumps(scan.notes, ensure_ascii=False),
