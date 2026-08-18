@@ -276,7 +276,8 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             raise HTTPException(400, str(exc)) from exc
         items = matrix.build(date.today())
         return {
-            "operator": matrix.operator,
+            "operator": ", ".join(matrix.operators),
+            "operators": matrix.operators,
             "countries": matrix.countries,
             "departure_cities": matrix.departure_cities,
             "modes": matrix.modes,
@@ -328,7 +329,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             async def one(p: SearchParams) -> None:
                 try:
                     async with sem:
-                        run_id, res = await run_scan(p, matrix.operator, db_path)
+                        run_id, res = await run_scan(p, p.operators[0], db_path)
                     sweep.results.append({
                         "run_id": run_id, "country": p.destination_country,
                         "departure_city": p.departure_city, "mode": p.search_mode,
@@ -417,6 +418,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                 "cases": [
                     {
                         "id": c.id, "title": c.title,
+                        "operator": c.operator,
                         "departure_city": c.departure_city, "country": c.country,
                         "search_mode": c.search_mode,
                         "date_from": c.date_from.isoformat(),
@@ -461,6 +463,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             "findings": [
                 {
                     "id": r["id"], "run_id": r["run_id"], "run_at": r["run_at"],
+                    "operator": r["operator"],
                     "departure_city": r["departure_city"],
                     "country": r["destination_country"],
                     "search_mode": r["search_mode"],

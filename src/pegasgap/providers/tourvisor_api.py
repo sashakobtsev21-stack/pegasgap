@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -58,13 +59,13 @@ LIST_URL = "https://tourvisor.ru/xml/listdev.php"
 SEARCH_URL = "https://tourvisor.ru/xml/modsearch.php"
 RESULT_URL = "https://search3.tourvisor.ru/modresult.php"
 
-# Оба эндпоинта требуют реферер — и заголовком, и параметром запроса. Без него ответ
-# приходит пустым; это часть контракта, а не обход защиты.
 # Сколько страниц выдачи забирать. Каждая — отдельный запуск и опрос, то есть секунды
 # времени и заметная нагрузка на площадку, которая и без того режет нас по IP. Десять
 # страниц на живой Турции дали около полутора сотен отелей против пятнадцати на одной.
 MAX_PAGES = int(os.environ.get("PEGASGAP_TOURVISOR_PAGES") or 10)
 
+# Оба эндпоинта требуют реферер — и заголовком, и параметром запроса. Без него ответ
+# приходит пустым; это часть контракта, а не обход защиты.
 REFERER = "https://tourvisor.ru/"
 # `referrer` должен указывать на ТУ САМУЮ страницу, чью форму мы имитируем: с туровым
 # реферером запрос в режиме отелей отбивается 401. Проверяется, судя по всему, связка
@@ -185,11 +186,30 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+# Витрина сокращает названия городов, и по полному имени они не находятся: поиск из
+# Петербурга молча превращался в «города нет на Турвизоре». Ключ — имя без точек,
+# пробелов и дефисов в нижнем регистре, значение — как записано у витрины.
+_CITY_ALIASES = {
+    "санктпетербург": "С.Петербург",
+    "нижнийновгород": "Н.Новгород",
+    "минеральныеводы": "Мин.Воды",
+    "петропавловсккамчатский": "П.Камчатский",
+    "южносахалинск": "Ю.Сахалинск",
+    "нижнийтагил": "Н.Тагил",
+}
+
+
+def _dictionary_key(name: str) -> str:
+    return re.sub(r"[\s.\-]", "", (name or "").strip().casefold())
+
+
 def _find_id(items: list[dict], wanted: str) -> int | None:
-    """ID записи справочника по имени: точное совпадение, затем вхождение."""
+    """ID записи справочника по имени: алиас, точное совпадение, затем вхождение."""
     target = (wanted or "").strip().casefold()
     if not target:
         return None
+    target = _CITY_ALIASES.get(_dictionary_key(target), target).casefold()
+
     exact = [i for i in items if str(i.get("name") or "").strip().casefold() == target]
     partial = [i for i in items if target in str(i.get("name") or "").strip().casefold()]
     for candidate in (exact, partial):

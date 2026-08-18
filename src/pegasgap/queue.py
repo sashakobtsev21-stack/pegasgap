@@ -30,6 +30,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     case_key        TEXT    NOT NULL UNIQUE,
+    operator        TEXT    NOT NULL DEFAULT 'Pegas Touristik',
     departure_city  TEXT    NOT NULL,
     country         TEXT    NOT NULL,
     search_mode     TEXT    NOT NULL,
@@ -56,6 +57,7 @@ class Case:
     """Строка очереди."""
 
     id: int
+    operator: str
     departure_city: str
     country: str
     search_mode: str
@@ -69,7 +71,12 @@ class Case:
     checks: int
     gaps_found: int
 
-    def to_params(self, operator: str = PEGAS) -> SearchParams:
+    def to_params(self, operator: str | None = None) -> SearchParams:
+        """Параметры поиска. Оператор берётся из самого кейса — он его измерение.
+
+        Аргумент оставлен для принудительной подмены (разовая сверка одного направления
+        по другому ТО), но по умолчанию не нужен и не используется.
+        """
         return SearchParams(
             departure_city=self.departure_city,
             destination_country=self.country,
@@ -77,7 +84,7 @@ class Case:
             nights_min=self.nights, nights_max=self.nights,
             adults=self.adults, children_ages=list(self.children_ages),
             search_mode=self.search_mode,  # type: ignore[arg-type]
-            operators=[operator],
+            operators=[operator or self.operator],
         )
 
     @property
@@ -87,26 +94,34 @@ class Case:
                 f"({', '.join(str(a) for a in self.children_ages)})"
                 if self.children_ages else "")
         mode = "отели" if self.search_mode == "hotels" else "туры"
-        return (f"{self.departure_city} → {self.country}, "
+        return (f"{self.operator}: {self.departure_city} → {self.country}, "
                 f"{self.date_from:%d.%m.%Y}–{self.date_to:%d.%m.%Y}, "
                 f"{self.nights} ноч., {self.adults} взр.{kids}, {mode}")
 
 
 def case_key(departure_city: str, country: str, mode: str, date_from: date, date_to: date,
-             nights: int, adults: int, children_ages: list[int]) -> str:
+             nights: int, adults: int, children_ages: list[int],
+             operator: str = PEGAS) -> str:
     """Стабильный ключ кейса.
 
     Даты входят в ключ как есть: кейс на конкретное окно — это конкретная проверка, и
     завтрашнее окно с тем же смещением от «сегодня» будет уже другим кейсом.
+
+    Оператор — тоже часть ключа: один и тот же поиск по Pegas и по Coral даёт разную
+    выдачу и разные пропуски, и схлопывать их в один кейс нельзя. Он идёт ПОСЛЕДНИМ и со
+    значением по умолчанию, чтобы ключи прежних, ещё однооператорных кейсов совпали и
+    очередь не потеряла историю проверок.
     """
     kids = ",".join(str(a) for a in sorted(children_ages))
-    return (f"{mode}|{departure_city}|{country}|{date_from:%Y-%m-%d}..{date_to:%Y-%m-%d}"
+    base = (f"{mode}|{departure_city}|{country}|{date_from:%Y-%m-%d}..{date_to:%Y-%m-%d}"
             f"|{nights}|{adults}+{kids}")
+    return base if operator == PEGAS else f"{base}|{operator}"
 
 
 def _row_to_case(row: sqlite3.Row) -> Case:
     return Case(
         id=row["id"],
+        operator=row["operator"],
         departure_city=row["departure_city"],
         country=row["country"],
         search_mode=row["search_mode"],
@@ -126,7 +141,7 @@ def _row_to_case(row: sqlite3.Row) -> Case:
 def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
              search_mode: str, date_from: date, date_to: date, nights: int,
              adults: int = 2, children_ages: list[int] | None = None,
-             priority: int = 0) -> int:
+             priority: int = 0, operator: str = PEGAS) -> int:
     """Добавить кейс. Существующий не дублируется, но приоритет обновляется.
 
     Обновляем именно приоритет: объёмы у оператора меняются, и повторный посев не должен
@@ -135,15 +150,15 @@ def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
     """
     children_ages = children_ages or []
     key = case_key(departure_city, country, search_mode, date_from, date_to,
-                   nights, adults, children_ages)
+                   nights, adults, children_ages, operator)
     cur = conn.execute(
-        """INSERT INTO cases (case_key, departure_city, country, search_mode,
+        """INSERT INTO cases (case_key, operator, departure_city, country, search_mode,
                               date_from, date_to, nights, adults, children_ages, priority)
-           VALUES (?,?,?,?,?,?,?,?,?,?)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(case_key) DO UPDATE SET
                priority = excluded.priority,
                enabled = 1""",
-        (key, departure_city, country, search_mode, date_from.isoformat(),
+        (key, operator, departure_city, country, search_mode, date_from.isoformat(),
          date_to.isoformat(), nights, adults,
          json.dumps(children_ages), priority),
     )
@@ -238,12 +253,14 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix,
     weight = {pair: len(routes) - i for i, pair in enumerate(routes)}
     wanted: list[str] = []
     for params in matrix.build(today):
+        operator = params.operators[0] if params.operators else PEGAS
         wanted.append(case_key(
             params.departure_city, params.destination_country, params.search_mode,
             params.date_from, params.date_to, params.nights_min, params.adults,
-            list(params.children_ages)))
+            list(params.children_ages), operator))
         add_case(
             conn,
+            operator=operator,
             departure_city=params.departure_city,
             country=params.destination_country,
             search_mode=params.search_mode,

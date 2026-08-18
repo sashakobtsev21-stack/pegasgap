@@ -50,11 +50,13 @@ def test_case_key_ignores_child_order():
 
 def test_case_title_reads_like_the_report_line():
     conn_case = q.Case(
-        id=1, departure_city="Москва", country="Египет", search_mode="tours",
+        id=1, operator="Coral Travel",
+        departure_city="Москва", country="Египет", search_mode="tours",
         date_from=date(2026, 10, 20), date_to=date(2026, 10, 25), nights=5,
         adults=3, children_ages=[12], priority=0, last_checked=None,
         checks=0, gaps_found=0)
     title = conn_case.title
+    assert "Coral Travel" in title        # оператор — измерение кейса, он в заголовке
     assert "Москва → Египет" in title
     assert "20.10.2026" in title
     assert "3 взр." in title and "12" in title
@@ -327,3 +329,23 @@ async def test_untrustworthy_data_does_not_stop_the_worker(tmp_path):
 
     assert calls == 4                            # прошёл всё, не остановился
     assert worker.state.stopped_reason is None
+
+
+def test_same_search_by_different_operators_are_different_cases(conn):
+    """Иначе три оператора схлопнулись бы в один кейс и проверялся бы только первый."""
+    common = dict(departure_city="Москва", country="Турция", search_mode="tours",
+                  date_from=date(2026, 9, 1), date_to=date(2026, 9, 8), nights=7)
+    a = q.add_case(conn, operator="Pegas Touristik", **common)
+    b = q.add_case(conn, operator="Coral Travel", **common)
+    c = q.add_case(conn, operator="Sunmar", **common)
+    assert len({a, b, c}) == 3
+    assert {case.operator for case in q.list_cases(conn)} == {
+        "Pegas Touristik", "Coral Travel", "Sunmar"}
+
+
+def test_pegas_case_key_is_unchanged_so_history_survives():
+    """Оператор идёт в ключ только когда он не Pegas: прежние кейсы все были по нему, и
+    менять им ключ значило бы обнулить накопленную историю проверок."""
+    args = ("Москва", "Турция", "tours", date(2026, 9, 1), date(2026, 9, 8), 7, 2, [])
+    assert q.case_key(*args) == q.case_key(*args, "Pegas Touristik")
+    assert q.case_key(*args, "Coral Travel") != q.case_key(*args)

@@ -124,10 +124,11 @@ export default function MonitorPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="w-10 py-2 pr-2 font-semibold">✓</th>
+                  <th className="py-2 pr-3 font-semibold">Оператор</th>
                   <th className="py-2 pr-3 font-semibold">Направление и даты</th>
                   <th className="py-2 pr-3 font-semibold">Туристы</th>
                   <th className="py-2 pr-3 font-semibold">Класс</th>
@@ -149,6 +150,9 @@ export default function MonitorPage() {
                           ? <CheckCircle2 className="size-4 text-emerald-400" />
                           : <Circle className="size-4" />}
                       </button>
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap font-medium text-ink">
+                      {f.operator}
                     </td>
                     <td className="py-2 pr-3">
                       <div className="font-medium text-ink">

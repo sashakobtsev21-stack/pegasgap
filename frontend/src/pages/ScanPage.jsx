@@ -289,6 +289,7 @@ function FullScan() {
                 {queue.cases.map((c) => (
                   <tr key={c.id} className="border-b border-white/5">
                     <td className="py-1.5 pr-3 text-ink">
+                      <span className="text-[11px] text-muted">{c.operator}</span>{" "}
                       {c.departure_city} → {c.country}
                     </td>
                     <td className="py-1.5 pr-3 text-[11px] text-muted">

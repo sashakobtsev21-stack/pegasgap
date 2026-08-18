@@ -101,6 +101,11 @@ _MIGRATIONS = {
         "reviewed": "INTEGER NOT NULL DEFAULT 0",
         "reviewed_at": "TEXT",
     },
+    # Оператор стал измерением кейса. Прежние кейсы все были по Pegas — значение по
+    # умолчанию проставляет им его же, поэтому история проверок переживает обновление.
+    "cases": {
+        "operator": "TEXT NOT NULL DEFAULT 'Pegas Touristik'",
+    },
 }
 
 
@@ -283,7 +288,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
     return conn.execute(
         f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
-                   r.search_mode, r.params_json
+                   r.search_mode, r.params_json, r.operator
               FROM gaps g JOIN runs r ON r.id = g.run_id
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    {"AND g.reviewed = 0" if only_open else ""}

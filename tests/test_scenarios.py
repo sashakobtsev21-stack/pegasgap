@@ -82,7 +82,7 @@ def test_missing_file_says_what_to_do(tmp_path):
 def test_shipped_config_is_valid():
     """Файл в репозитории должен разбираться — иначе `sweep` падает на первом же запуске."""
     matrix = load_matrix("scenarios.yaml")
-    assert matrix.operator == PEGAS
+    assert PEGAS in matrix.operators
     assert matrix.build(date(2026, 9, 1))
 
 
@@ -179,3 +179,48 @@ def test_backwards_duration_is_rejected(tmp_path):
         encoding="utf-8")
     with pytest.raises(ValueError, match="задом наперёд"):
         load_matrix(cfg)
+
+
+def test_operators_are_a_case_dimension(tmp_path):
+    """Один и тот же поиск по Pegas и по Coral даёт разную выдачу и разные пропуски —
+    схлопывать их в один кейс нельзя."""
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operators: [Pegas Touristik, Coral Travel, Sunmar]\n"
+        "defaults:\n  modes: [tours]\n"
+        "routes:\n  - {from: Москва, country: Турция}\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    built = load_matrix(cfg).build(date(2026, 9, 1))
+    assert [p.operators[0] for p in built] == ["Pegas Touristik", "Coral Travel", "Sunmar"]
+
+
+def test_single_operator_key_is_still_understood(tmp_path):
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operator: Coral Travel\n"
+        "defaults:\n  modes: [tours]\n"
+        "routes:\n  - {from: Москва, country: Турция}\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    assert load_matrix(cfg).operators == ["Coral Travel"]
+
+
+def test_hotels_mode_collapses_departure_cities(tmp_path):
+    """«Без перелёта» — это проживание, город вылета там не значит ничего: витрина
+    подставляет псевдогород независимо от запроса. Десять городов дали бы десять
+    одинаковых поисков и десять копий одной находки."""
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(
+        "operator: Pegas Touristik\n"
+        "defaults:\n"
+        "  modes: [tours, hotels]\n"
+        "  departure_cities: [Москва, Казань, Уфа]\n"
+        "countries: [Турция]\n"
+        "windows:\n  - {offset_days: 14}\n",
+        encoding="utf-8")
+    built = load_matrix(cfg).build(date(2026, 9, 1))
+    tours = [p for p in built if p.search_mode == "tours"]
+    hotels = [p for p in built if p.search_mode == "hotels"]
+    assert len(tours) == 3                       # города важны — три поиска
+    assert [p.departure_city for p in hotels] == ["Москва"]   # а тут один

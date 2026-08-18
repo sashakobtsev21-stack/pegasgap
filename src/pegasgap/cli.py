@@ -105,7 +105,7 @@ async def _diagnose(scan: ScanResult) -> None:
     diagnose(scan, catalog, links)
 
 
-async def _run_many(items: list[SearchParams], operator: str, headless: bool,
+async def _run_many(items: list[SearchParams], operator: str | None, headless: bool,
                     jobs: int) -> list[ScanResult]:
     """Прогнать сценарии с ограничением параллельности.
 
@@ -118,7 +118,9 @@ async def _run_many(items: list[SearchParams], operator: str, headless: bool,
     async def one(p: SearchParams) -> ScanResult:
         nonlocal done
         async with sem:
-            scan = await _run_one(p, operator, headless)
+            # Оператор берётся из самого сценария: обход многооператорный,
+            # и один на всех означал бы разбор чужой выдачи.
+            scan = await _run_one(p, operator or p.operators[0], headless)
         done += 1
         console.print(f"[dim]({done}/{len(items)}) {p.departure_city} → "
                       f"{p.destination_country}, {p.search_mode}: "
@@ -206,9 +208,10 @@ def sweep(
     configure_logging(logging.INFO)
     matrix = load_matrix(config)
     items = matrix.build(date.today())
-    console.print(f"[bold]Обход:[/bold] {len(items)} сценариев, оператор {matrix.operator}, "
+    console.print(f"[bold]Обход:[/bold] {len(items)} сценариев, "
+                  f"операторы: {', '.join(matrix.operators)}, "
                   f"параллельно {jobs}")
-    scans = asyncio.run(_run_many(items, matrix.operator, headless, jobs))
+    scans = asyncio.run(_run_many(items, None, headless, jobs))
     _persist_and_show(scans, db, csv_path, html_path)
 
 

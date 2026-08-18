@@ -185,32 +185,6 @@ def test_rating_keeps_fraction():
 # --------------------------------- город вылета ---------------------------------
 
 
-def test_gateway_serves_only_one_departure_city():
-    """Шлюз не применяет cityFromId: для Москвы, Петербурга, Казани и Тюмени он вернул
-    побайтово одинаковые выдачу, цены (30332…76566) и счётчики — отличалось только эхо
-    параметра в строке. Значит для любого другого города мы сравнивали бы РЕАЛЬНУЮ
-    выдачу Турвизора с чужой нашей, и каждое расхождение было бы выдумкой."""
-    from pegasgap.providers.sletat_api import GATEWAY_CITY, city_is_supported
-    assert city_is_supported(GATEWAY_CITY)
-    assert city_is_supported(GATEWAY_CITY.lower())      # регистр не должен мешать
-    assert not city_is_supported("Казань")
-    assert not city_is_supported("")
-
-
-async def test_unsupported_city_fails_instead_of_lying():
-    """Отказ, а не молчаливый неверный ответ: пустой результат честнее выдуманных находок."""
-    from datetime import date
-
-    from pegasgap.models import SearchParams
-    from pegasgap.providers.sletat_api import SletatApiProvider
-    params = SearchParams(
-        departure_city="Казань", destination_country="Турция",
-        date_from=date(2026, 9, 16), date_to=date(2026, 9, 23),
-        nights_min=7, nights_max=7, adults=2,
-    )
-    result = await SletatApiProvider().search(params)
-    assert result.success is False
-    assert "города вылета" in (result.error or "")
 
 
 def test_rate_limit_is_recognised_as_quota_not_breakage():

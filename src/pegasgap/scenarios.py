@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -60,7 +61,9 @@ class Pax:
 class Matrix:
     """Разобранный файл сценариев."""
 
-    operator: str = PEGAS
+    # Операторы. Измерение кейса: один и тот же поиск по Pegas и по Coral даёт разную
+    # выдачу и разные пропуски. Единственный оператор в конфиге читается по-прежнему.
+    operators: list[str] = field(default_factory=lambda: [PEGAS])
     departure_cities: list[str] = field(default_factory=lambda: ["Москва"])
     countries: list[str] = field(default_factory=list)
     # Явные пары «откуда → куда». Заданы — перекрёстное произведение не используется.
@@ -91,26 +94,49 @@ class Matrix:
     def build(self, today: date | None = None) -> list[SearchParams]:
         """Развернуть матрицу в конкретные запросы."""
         today = today or date.today()
+        combos = itertools.product(self.operators, self.pairs(), self.modes,
+                                   self.windows, self.durations, self.pax)
         out: list[SearchParams] = []
-        for city, country in self.pairs():
-            for mode in self.modes:
-                for window in self.windows:
-                    for nights in self.durations:
-                        for pax in self.pax:
-                            date_from, date_to = window.dates(today)
-                            out.append(SearchParams(
-                                departure_city=city,
-                                destination_country=country,
-                                date_from=date_from,
-                                date_to=date_to,
-                                nights_min=nights.minimum,
-                                nights_max=nights.maximum,
-                                adults=pax.adults,
-                                children_ages=list(pax.children),
-                                search_mode=mode,  # type: ignore[arg-type]
-                                operators=[self.operator],
-                            ))
+        seen: set[tuple] = set()
+        for operator, (city, country), mode, window, nights, pax in combos:
+            # «Без перелёта» — проживание, и город вылета там не значит ничего: витрина
+            # подставляет псевдогород «Без перелета» независимо от того, что мы просили.
+            # Десять городов дали бы десять побайтово одинаковых поисков и десять копий
+            # одной находки, поэтому в этом режиме город схлопывается в один.
+            if mode == "hotels":
+                city = self.departure_cities[0] if self.departure_cities else city
+            date_from, date_to = window.dates(today)
+            fingerprint = (operator, city, country, mode, window.offset_days,
+                           nights.minimum, nights.maximum, pax.adults,
+                           tuple(pax.children))
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            out.append(SearchParams(
+                departure_city=city,
+                destination_country=country,
+                date_from=date_from,
+                date_to=date_to,
+                nights_min=nights.minimum,
+                nights_max=nights.maximum,
+                adults=pax.adults,
+                children_ages=list(pax.children),
+                search_mode=mode,  # type: ignore[arg-type]
+                operators=[operator],
+            ))
         return out
+
+
+def _read_operators(raw: dict) -> list[str]:
+    """Операторы из конфига: список `operators` либо одиночный `operator`.
+
+    Одиночный ключ читается по-прежнему — по нему написан прежний конфиг, и ломать его
+    ради нового измерения незачем.
+    """
+    many = raw.get("operators")
+    if many:
+        return [str(o).strip() for o in many if str(o).strip()]
+    return [str(raw.get("operator") or PEGAS).strip()]
 
 
 def _read_durations(defaults: dict, path: Path) -> list[Nights]:
@@ -160,7 +186,7 @@ def load_matrix(path: Path | str = DEFAULT_CONFIG) -> Matrix:
             raise ValueError(f"В {path} маршрут без `from` или `country`: {item!r}")
         routes.append((str(city).strip(), str(country).strip()))
     matrix = Matrix(
-        operator=raw.get("operator") or PEGAS,
+        operators=_read_operators(raw),
         departure_cities=list(defaults.get("departure_cities") or ["Москва"]),
         countries=list(raw.get("countries") or []),
         routes=routes,

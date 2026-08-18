@@ -87,16 +87,14 @@ MAX_PAGES = int(os.environ.get("PEGASGAP_API_MAX_PAGES") or 15)
 POLL_INTERVAL_S = 1.5   # рекомендация документации шлюза
 POLL_TIMEOUT_S = float(os.environ.get("PEGASGAP_API_POLL_TIMEOUT_S") or 120)
 
-# Единственный город вылета, которому можно верить на анонимном шлюзе.
+# Город вылета по умолчанию — для CLI и для режима «без перелёта», где город не значит
+# ничего. Ограничением он больше не является.
 #
-# Проверено: `cityFromId` он не применяет. Для Москвы, Петербурга, Казани и Тюмени
-# возвращаются побайтово одинаковые выдача, цены (мин. 30332, макс. 76566) и счётчики —
-# отличается только эхо параметра в самой строке. То есть для любого другого города мы
-# сравнивали бы РЕАЛЬНУЮ выдачу Турвизора с чужой нашей, и каждое расхождение было бы
-# выдумкой. Поэтому такие запросы отклоняются, а не выполняются молча.
-#
-# Если шлюз научится (или заработает с расширенными доступами) — переопределяется
-# переменной окружения.
+# Раньше здесь стоял запрет на всё, кроме Москвы: считалось, что шлюз не применяет
+# `cityFromId`. Это оказалось неверно — вывод был сделан по слишком грубому сравнению.
+# Перепроверка с разбором самих выдач: Москва 983 отеля, Петербург 899, Екатеринбург 906,
+# Казань 703, Новосибирск 690 (Турция, одно окно, Pegas), отпечатки состава и цен у всех
+# разные. Города различаются, и измерение городов вылета открыто.
 GATEWAY_CITY = os.environ.get("PEGASGAP_GATEWAY_CITY") or "Москва"
 
 _SECRET_RE = re.compile(r"(login|password)=[^&]*", re.IGNORECASE)
@@ -110,11 +108,6 @@ def _redact(url: str) -> str:
 
 class SletatApiError(RuntimeError):
     """Шлюз ответил ошибкой или неожиданной структурой."""
-
-
-def city_is_supported(city: str) -> bool:
-    """Можно ли доверять выдаче шлюза для этого города вылета. См. `GATEWAY_CITY`."""
-    return (city or "").strip().casefold() == GATEWAY_CITY.strip().casefold()
 
 
 def parse_price(value: Any) -> Decimal | None:
@@ -248,11 +241,6 @@ class SletatApiProvider:
     async def search(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
-        if not city_is_supported(params.departure_city):
-            return self._fail(params, start,
-                              f"шлюз не различает города вылета и на «{params.departure_city}» "
-                              f"вернул бы выдачу для «{GATEWAY_CITY}» — сравнение было бы "
-                              f"ложным. Поддерживается только «{GATEWAY_CITY}»")
         try:
             async with httpx.AsyncClient(timeout=self.timeout_ms / 1000,
                                          headers={"Referer": REFERER}) as client:
