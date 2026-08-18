@@ -169,3 +169,29 @@ def test_sweep_idle_state(client):
     body = client.get("/api/sweep").json()
     assert body["running"] is False
     assert body["done"] == 0
+
+
+def test_sweep_matrix_lists_actual_scenarios(tmp_path):
+    """«12 сценариев» не отвечает на вопрос «что именно проверится», а даты по конфигу
+    вообще не прочитать: там смещения от дня запуска. Поэтому эндпоинт отдаёт
+    развёрнутый список, а не только его размер."""
+    config = tmp_path / "scenarios.yaml"
+    config.write_text(
+        "operator: Pegas Touristik\n"
+        "defaults:\n  departure_cities: [Москва]\n  nights_min: 7\n  modes: [tours, hotels]\n"
+        "countries: [Турция, Египет]\n"
+        "windows:\n  - offset_days: 30\n",
+        encoding="utf-8")
+    app = create_app(db_path=tmp_path / "m.db", config_path=config)
+    with TestClient(app) as c:
+        body = c.get("/api/sweep/matrix").json()
+
+    assert body["total"] == 4                      # 1 город × 2 страны × 2 режима × 1 окно
+    assert len(body["scenarios"]) == 4
+    first = body["scenarios"][0]
+    assert first["departure_city"] == "Москва"
+    assert {s["mode"] for s in body["scenarios"]} == {"tours", "hotels"}
+    assert {s["country"] for s in body["scenarios"]} == {"Турция", "Египет"}
+    # Даты конкретные, а не смещения — иначе список не помог бы свериться.
+    assert first["date_from"].count("-") == 2
+    assert first["date_from"] < first["date_to"]

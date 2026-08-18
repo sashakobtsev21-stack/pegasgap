@@ -271,12 +271,28 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             matrix = load_matrix(config_path)
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
+        items = matrix.build(date.today())
         return {
             "operator": matrix.operator,
             "countries": matrix.countries,
             "departure_cities": matrix.departure_cities,
             "modes": matrix.modes,
-            "total": len(matrix.build(date.today())),
+            "total": len(items),
+            # Развёрнутый список, а не только его размер. «12 сценариев» ничего не говорит
+            # о том, что именно проверится, а окна дат вдобавок считаются от дня запуска —
+            # по конфигу их не прочитать, там смещения.
+            "scenarios": [
+                {
+                    "departure_city": p.departure_city,
+                    "country": p.destination_country,
+                    "mode": p.search_mode,
+                    "date_from": p.date_from.isoformat(),
+                    "date_to": p.date_to.isoformat(),
+                    "nights": p.nights_min,
+                    "adults": p.adults,
+                }
+                for p in items
+            ],
         }
 
     @app.get("/api/sweep")
@@ -340,6 +356,21 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
     # был один адрес, который «просто открывается».
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
+        @app.middleware("http")
+        async def no_cache_index(request, call_next):
+            """Запретить кеширование index.html.
+
+            Имена ассетов содержат хеш содержимого, поэтому их браузеру кешировать можно
+            и нужно. А вот index.html ссылается на эти имена — закешированный, он после
+            пересборки фронта продолжает тянуть старые чанки, и правки «не появляются»,
+            пока не нажмёшь Ctrl+F5. Ловушка неочевидная, поэтому закрываем заголовком.
+            """
+            response = await call_next(request)
+            path = request.url.path
+            if path in ("/app", "/app/") or path.endswith("/index.html"):
+                response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            return response
+
         app.mount("/app", StaticFiles(directory=str(dist), html=True), name="dashboard")
 
         @app.get("/")

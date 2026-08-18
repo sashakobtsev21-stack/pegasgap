@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { m } from "framer-motion";
-import { AlertTriangle, CheckCircle2, Loader2, Play, Radar } from "lucide-react";
+import {
+  AlertTriangle, CheckCircle2, ChevronDown, ListChecks, Loader2, Play, Radar,
+} from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
 import { getJson, postJson } from "../lib/api.js";
+import { formatDate } from "../lib/format.js";
 
 /**
  * SweepPage — обход всей матрицы направлений из scenarios.yaml.
@@ -18,6 +21,8 @@ export default function SweepPage() {
   const [matrix, setMatrix] = useState(null);
   const [state, setState] = useState(null);
   const [error, setError] = useState(null);
+  // Список свёрнут по умолчанию: он нужен, чтобы свериться, а не чтобы жить на экране.
+  const [showList, setShowList] = useState(false);
   const timer = useRef(null);
 
   useEffect(() => {
@@ -91,14 +96,66 @@ export default function SweepPage() {
           )}
 
           <p className="mt-3 text-xs text-muted">
-            Один сценарий — это направление × режим × окно дат. Список правится в файле{" "}
-            <code className="text-ink">scenarios.yaml</code> в корне проекта.
+            Список правится в файле <code className="text-ink">scenarios.yaml</code> в корне
+            проекта. Окна дат там заданы смещением от дня запуска, поэтому конкретные даты
+            ниже — на сегодня.
             {hasHotels && (
               <> Режим «Отели» читается браузером и идёт заметно дольше туров —
               обход с ним занимает минуты, а не секунды.</>
             )}
           </p>
         </GlassCard>
+
+        {/* Что именно проверится — списком. Абстракция «12 сценариев» не отвечает на этот
+            вопрос, а даты по конфигу вообще не прочитать: там смещения, не числа. */}
+        {matrix?.scenarios?.length > 0 && (
+          <GlassCard variants={fadeUp} className="p-5">
+            <button
+              type="button"
+              onClick={() => setShowList((v) => !v)}
+              className="flex w-full items-center gap-2 text-left text-sm font-bold text-white"
+            >
+              <ListChecks className="size-4 text-brand-soft" />
+              Что будет проверено · {matrix.scenarios.length}
+              <ChevronDown
+                className={`ml-auto size-4 text-muted transition-transform ${showList ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showList && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted">
+                      <th className="py-2 pr-3 font-semibold">#</th>
+                      <th className="py-2 pr-3 font-semibold">Направление</th>
+                      <th className="py-2 pr-3 font-semibold">Режим</th>
+                      <th className="py-2 pr-3 font-semibold">Окно вылета</th>
+                      <th className="py-2 font-semibold">Ночей</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrix.scenarios.map((s, i) => (
+                      <tr key={i} className="border-b border-white/5">
+                        <td className="py-1.5 pr-3 tabular-nums text-muted">{i + 1}</td>
+                        <td className="py-1.5 pr-3 text-ink">
+                          {s.departure_city} → {s.country}
+                        </td>
+                        <td className="py-1.5 pr-3 text-muted">
+                          {s.mode === "hotels" ? "отели (без перелёта)" : "туры (с перелётом)"}
+                        </td>
+                        <td className="py-1.5 pr-3 tabular-nums text-muted">
+                          {formatDate(s.date_from)} – {formatDate(s.date_to)}
+                        </td>
+                        <td className="py-1.5 tabular-nums text-muted">{s.nights}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </GlassCard>
+        )}
 
         {error && (
           <GlassCard variants={fadeUp} className="p-5 text-sm text-rose-300">{error}</GlassCard>
