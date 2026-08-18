@@ -276,3 +276,22 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix,
         f"UPDATE cases SET enabled = 0 WHERE enabled = 1 AND case_key NOT IN ({placeholders})",
         wanted)
     return len(wanted), cur.rowcount or 0
+
+
+def dimensions(conn: sqlite3.Connection) -> dict:
+    """Из чего сложена очередь — по самой очереди, а не по конфигу.
+
+    Считаем по засеянному, потому что важно то, что реально проверяется: конфиг могли
+    поправить и не пересобрать очередь, и тогда его числа рассказывали бы о другом.
+    """
+    row = conn.execute(
+        """SELECT COUNT(DISTINCT operator)                    AS operators,
+                  COUNT(DISTINCT departure_city)              AS cities,
+                  COUNT(DISTINCT country)                     AS countries,
+                  COUNT(DISTINCT date_from || '..' || date_to) AS windows,
+                  COUNT(DISTINCT nights)                      AS durations,
+                  COUNT(DISTINCT search_mode)                 AS modes,
+                  COUNT(DISTINCT adults || '+' || children_ages) AS pax
+             FROM cases WHERE enabled = 1"""
+    ).fetchone()
+    return dict(row) if row else {}

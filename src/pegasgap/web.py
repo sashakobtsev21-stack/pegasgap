@@ -448,6 +448,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             cases = case_queue.list_cases(conn, limit=limit)
             return {
                 "stats": case_queue.stats(conn),
+                "dimensions": case_queue.dimensions(conn),
                 "cases": [
                     {
                         "id": c.id, "title": c.title,

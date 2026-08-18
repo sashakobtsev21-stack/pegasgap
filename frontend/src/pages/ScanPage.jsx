@@ -209,7 +209,7 @@ function FullScan() {
 
   const reload = () => {
     getJson("/api/worker").then(setWorker).catch(() => {});
-    getJson("/api/queue?limit=500").then(setQueue).catch(() => {});
+    getJson("/api/queue?limit=300").then(setQueue).catch(() => {});
     getJson("/api/proxies").then(setProxies).catch(() => {});
   };
   useEffect(reload, []);
@@ -254,6 +254,24 @@ function FullScan() {
           </p>
         </div>
       </div>
+
+      {/* Из чего складывается очередь — иначе непонятно, откуда взялись тысячи кейсов
+          и что вообще проверяется. Считается по самой очереди, а не по конфигу: важно
+          то, что реально засеяно. */}
+      {queue?.dimensions && (
+        <p className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-muted">
+          Каждый кейс — это один поиск: оператор, город вылета, страна, окно дат,
+          длительность и состав туристов. Очередь — все их сочетания:{" "}
+          <b className="text-ink">{queue.dimensions.operators}</b> опер. ×{" "}
+          <b className="text-ink">{queue.dimensions.cities}</b> гор. ×{" "}
+          <b className="text-ink">{queue.dimensions.countries}</b> стран ×{" "}
+          <b className="text-ink">{queue.dimensions.windows}</b> окон ×{" "}
+          <b className="text-ink">{queue.dimensions.durations}</b> длит. ×{" "}
+          <b className="text-ink">{queue.dimensions.modes}</b> реж. Состав задаётся
+          в <code>scenarios.yaml</code>, кнопка «Собрать очередь» приводит её в
+          соответствие с ним.
+        </p>
+      )}
 
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         <Stat label="Кейсов в очереди" value={stats.total ?? "—"} />
@@ -304,8 +322,11 @@ function FullScan() {
 
       {queue?.cases?.length > 0 && (
         <details className="mt-4">
+          {/* Раньше здесь стояло просто число показанных строк, и «500» читалось как
+              размер очереди, хотя в ней четыре тысячи кейсов. Тихая обрезка — тот же
+              дефект, что был в отчёте: скрытое неотличимо от отсутствующего. */}
           <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">
-            Что в очереди · {queue.cases.length}
+            Что в очереди · показаны первые {queue.cases.length} из {stats.total ?? "—"}
           </summary>
           <div className="mt-2 max-h-72 overflow-y-auto">
             <table className="w-full text-sm">
