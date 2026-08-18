@@ -271,9 +271,29 @@ def test_hotel_gaps_survive_lopsided_coverage():
     assert scan.trustworthy
 
 
-def test_truncated_collection_is_still_a_problem():
-    """Недособранная выдача — именно поломка: отель мог не догрузиться, а выглядит как
-    отсутствующий. От структурного перекоса это отличается принципиально."""
+def test_truncated_checked_side_is_a_problem():
+    """Недособранная выдача НАШЕЙ стороны — именно поломка: отель мог не догрузиться, а
+    выглядит как отсутствующий, то есть прямо порождает выдуманный пропуск."""
+    ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")])
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat")], truncated=True)
+    scan = detect(PARAMS, ref, chk)
+    assert not scan.trustworthy
+
+
+def test_truncated_reference_only_costs_completeness():
+    """А обрезка ЭТАЛОНА ложных находок не даёт: отель, который мы увидели, мы увидели.
+    С постраничным сбором крупные страны обрезаются постоянно, и прежнее правило душило бы
+    ровно те прогоны, ради которых постраничность и делалась."""
+    ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")], truncated=True)
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.trustworthy
+    assert any("не целиком" in n for n in scan.notes)
+
+
+def test_truncated_reference_is_a_problem_when_reverse_is_on(monkeypatch):
+    """«Есть у нас, нет у эталона» на недочитанном эталоне выдумано поголовно."""
+    monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")], truncated=True)
     chk = result("sletat", [hotel("A Palace", "100000", "sletat")])
     scan = detect(PARAMS, ref, chk)

@@ -17,10 +17,16 @@
 
 **Оба эндпоинта требуют `referrer` параметром запроса и заголовок `Referer`.**
 
-**Про полноту.** Витрина отдаёт по оператору выборку, а не весь каталог: блоки обрезаны
-пятью десятками отелей, и кнопка «показать ещё» исчезает, когда выборка исчерпана. Это
-свойство площадки, а не недосбор — но помнить о нём обязательно: эталон отвечает на
-вопрос «что Турвизор показывает по этому оператору», а не «что у оператора вообще есть».
+**Про полноту.** Выдача приходит страницами примерно по полтора десятка отелей, и её
+надо забирать до конца — см. `_collect_pages`. То, что на сайте выглядит кнопкой
+«показать ещё», это повторный вызов `modsearch.php` с `nextpage=1` и тем же `requestid`;
+у `modresult.php` параметра страницы нет вовсе. Раньше это принимали за жёсткую обрезку
+на стороне витрины, и сравнение шло против первой страницы: по Турции 15 отелей вместо
+177, то есть восемь процентов эталона.
+
+Полностью собранной выдача считается, когда очередная страница не приносит новых
+отелей. Упёрлись в `MAX_PAGES` раньше — результат помечается `truncated`: недогруженный
+отель неотличим от отсутствующего, и молчать об этом нельзя.
 """
 
 from __future__ import annotations
@@ -54,6 +60,11 @@ RESULT_URL = "https://search3.tourvisor.ru/modresult.php"
 
 # Оба эндпоинта требуют реферер — и заголовком, и параметром запроса. Без него ответ
 # приходит пустым; это часть контракта, а не обход защиты.
+# Сколько страниц выдачи забирать. Каждая — отдельный запуск и опрос, то есть секунды
+# времени и заметная нагрузка на площадку, которая и без того режет нас по IP. Десять
+# страниц на живой Турции дали около полутора сотен отелей против пятнадцати на одной.
+MAX_PAGES = int(os.environ.get("PEGASGAP_TOURVISOR_PAGES") or 10)
+
 REFERER = "https://tourvisor.ru/"
 # `referrer` должен указывать на ТУ САМУЮ страницу, чью форму мы имитируем: с туровым
 # реферером запрос в режиме отелей отбивается 401. Проверяется, судя по всему, связка
@@ -95,6 +106,16 @@ def _to_float(value: Any) -> float | None:
     except (ValueError, TypeError):
         return None
     return result or None
+
+
+def _hotel_codes(blocks: list[dict]) -> set[int]:
+    """Идентификаторы отелей во всех блоках — по ним меряется прирост страницы."""
+    return {
+        code
+        for block in blocks
+        for row in (block.get("hotel") or [])
+        if (code := _to_int(row.get("id"))) is not None
+    }
 
 
 def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
@@ -211,7 +232,7 @@ class TourvisorApiProvider:
                 operator_id = self._operator_id(lists, operator)
                 request_id, states = await self._start(
                     client, params, city_id, country_id, operator_id)
-                blocks, finished = await self._await_result(
+                blocks, finished, complete = await self._collect_pages(
                     client, request_id, self._referrer(params))
                 hotels = await self._hotels(client, country_id)
                 regions = _region_names(lists)
@@ -253,7 +274,10 @@ class TourvisorApiProvider:
             operator_filter_verified=operator_id is not None,
             # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
             # отель неотличим от отсутствующего.
-            truncated=not finished,
+            # Недогруженный отель неотличим от отсутствующего, поэтому обрезкой считается
+            # и незавершённый поиск, и упёршийся в предел страниц: и там и там мы видели
+            # не всю выдачу эталона, а её начало.
+            truncated=not finished or not complete,
             error=None if finished else "Поиск не завершился за отведённое время.",
         )
 
@@ -332,6 +356,50 @@ class TourvisorApiProvider:
     @staticmethod
     def _referrer(params: SearchParams) -> str:
         return REFERRER_HOTELS if params.search_mode == "hotels" else REFERRER_TOURS
+
+    async def _collect_pages(self, client: httpx.AsyncClient, request_id: int,
+                             referrer: str) -> tuple[list[dict], bool, bool]:
+        """Собрать выдачу целиком, а не первую страницу. Возвращает (блоки, дошли, всё).
+
+        Витрина отдаёт результат порциями примерно по полтора десятка отелей, и то, что
+        на сайте выглядит кнопкой «показать ещё», — это повторный вызов `modsearch.php`
+        с `nextpage=1` и тем же `requestid`. Не `modresult.php`: там никакого параметра
+        страницы нет, и именно поэтому обрезка так долго выглядела свойством площадки.
+
+        Цена ошибки была велика. Живая сверка по Турции: первая страница — 15 отелей,
+        обход страниц — 177, и на двенадцатой новые всё ещё шли. То есть мы сравнивали
+        свой полный каталог с восемью процентами эталона и физически не могли увидеть
+        пропуск за пределами первой страницы.
+
+        Ответ каждой следующей страницы КУМУЛЯТИВЕН — приходит вся выдача с начала, а не
+        только прирост. Поэтому блоки не склеиваются, а замещаются последним ответом;
+        считать при этом надо прирост уникальных отелей, иначе остановка не наступит.
+        """
+        blocks, finished = await self._await_result(client, request_id, referrer)
+        if not finished:
+            return blocks, False, False
+
+        seen = _hotel_codes(blocks)
+        for _ in range(MAX_PAGES - 1):
+            if not seen:
+                break
+            body = await self._get(client, SEARCH_URL, referrer=referrer,
+                                   nextpage=1, requestid=request_id)
+            next_id = _to_int((body.get("result") or {}).get("requestid"))
+            if not next_id:
+                return blocks, True, True      # витрина сказала, что дальше ничего нет
+            request_id = next_id
+            page_blocks, finished = await self._await_result(client, request_id, referrer)
+            if not finished:
+                return blocks, True, False     # оборвались на середине — выдача неполная
+            codes = _hotel_codes(page_blocks)
+            if not codes - seen:
+                return blocks, True, True      # прирост иссяк — выдача собрана целиком
+            seen |= codes
+            blocks = page_blocks
+        log.info("Tourvisor (json): предел в %d страниц исчерпан, отелей набрано %d",
+                 MAX_PAGES, len(seen))
+        return blocks, True, False
 
     async def _await_result(self, client: httpx.AsyncClient, request_id: int,
                             referrer: str) -> tuple[list[dict], bool]:

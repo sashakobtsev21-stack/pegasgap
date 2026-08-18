@@ -117,9 +117,15 @@ def _collect_problems(
     reference: ProviderResult | None,
     checked: ProviderResult | None,
     match: MatchResult | None,
-) -> list[str]:
-    """Причины не доверять этому прогону. Пусто = находкам можно верить."""
+) -> tuple[list[str], list[str]]:
+    """Разбор надёжности прогона: (проблемы, заметки).
+
+    Проблемы обесценивают находки — с любой из них прогон недостоверен целиком. Заметки
+    лишь описывают условия сбора и на доверие не влияют. Граница между ними одна: может
+    ли это породить ЛОЖНУЮ находку, или всего лишь укрыть настоящую.
+    """
     problems: list[str] = []
+    notes: list[str] = []
 
     if reference is None:
         problems.append("эталон: результата нет")
@@ -144,13 +150,27 @@ def _collect_problems(
             problems.append(f"{role}: фильтр по оператору не применился — данные непригодны")
 
     # Обрезанная выдача проверяемой стороны — прямой источник выдуманных пропусков: отель
-    # мог просто не догрузиться. На стороне эталона обрезка безопаснее (мы всего лишь
-    # увидим меньше находок), но полнотой отчёта тоже жертвует, поэтому отмечаем обе.
+    # мог просто не догрузиться, а выглядит это как «у оператора его нет».
     if checked is not None and checked.truncated:
         problems.append("проверяемая: выдача получена не целиком — часть «пропусков» может "
                         "оказаться просто недогруженными отелями")
+
+    # А вот обрезка ЭТАЛОНА ложных находок не даёт: отель, который мы увидели, мы увидели,
+    # и пропуск по нему настоящий независимо от того, сколько ещё осталось за кадром. Это
+    # потеря полноты, а не корректности, — то есть заметка. Раньше стояла проблема, и это
+    # было терпимо, пока эталон читался одной страницей и почти никогда не обрезался; с
+    # постраничным сбором крупные страны обрезаются постоянно, и прежнее правило душило бы
+    # ровно те прогоны, ради которых постраничность и делалась.
+    #
+    # Исключение — обратные пропуски: «есть у нас, нет у эталона» на недочитанном эталоне
+    # выдуманы поголовно. Включён их показ — обрезка снова становится проблемой.
     if reference is not None and reference.truncated:
-        problems.append("эталон: выдача получена не целиком — часть пропусков могла не попасть в отчёт")
+        message = ("эталон: выдача получена не целиком — часть пропусков могла не попасть "
+                   "в отчёт")
+        if REPORT_REVERSE:
+            problems.append(f"{message}, а обратные пропуски на ней недостоверны поголовно")
+        else:
+            notes.append(message)
 
     if reference and checked and reference.success and checked.success:
         currencies = {o.currency for o in reference.hotel_offers} | {
@@ -166,7 +186,7 @@ def _collect_problems(
             f"{match.matched_share:.0%}. Вероятнее расхождение в написании имён, чем "
             f"исчезновение стольких туров разом")
 
-    return problems
+    return problems, notes
 
 
 def _coverage_is_lopsided(reference_count: int, checked_count: int) -> bool:
@@ -286,12 +306,14 @@ def detect(
 
     # (1) Эталон не показал предложений — нечего требовать от проверяемой стороны.
     if not ref_status.has_offers:
-        result.problems = _collect_problems(reference, checked, None)
+        result.problems, extra = _collect_problems(reference, checked, None)
+        result.notes += extra
         return result
 
     # (2) У нас пусто целиком.
     if not chk_status.has_offers:
-        result.problems = _collect_problems(reference, checked, None)
+        result.problems, extra = _collect_problems(reference, checked, None)
+        result.notes += extra
         # UNKNOWN — поиск на проверяемой стороне НЕ состоялся (упал, отвалился по
         # таймауту, площадка не приняла запрос). Это отказ инструмента, а не пропуск
         # оператора, и разница здесь принципиальная: выдать находку — значит отправить
@@ -305,7 +327,8 @@ def detect(
     # (3) Обе стороны с предложениями — поштучный разбор.
     chk_hotels = checked.hotel_offers if checked else []
     match = match_hotels(ref_hotels, chk_hotels)
-    result.problems = _collect_problems(reference, checked, match)
+    result.problems, extra = _collect_problems(reference, checked, match)
+    result.notes += extra
 
     gaps: list[HotelGap] = [
         HotelGap(
