@@ -47,6 +47,7 @@ export default function SweepPage() {
     }
   }
 
+  const hasHotels = matrix?.modes?.includes("hotels");
   const running = state?.running;
   const done = state?.done ?? 0;
   const total = state?.total ?? matrix?.total ?? 0;
@@ -60,12 +61,10 @@ export default function SweepPage() {
             <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-brand to-ocean shadow-glow">
               <Radar className="size-5 text-white" />
             </span>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-extrabold tracking-tight text-white">Обход матрицы</h1>
               <p className="text-xs text-muted">
-                {matrix
-                  ? `${matrix.total} сценариев: ${matrix.countries.join(", ")} из ${matrix.departure_cities.join(", ")}`
-                  : "Загружаю матрицу…"}
+                Проверяет разом все направления из списка — то, что вешают на ночное расписание
               </p>
             </div>
             <button
@@ -79,14 +78,39 @@ export default function SweepPage() {
             </button>
           </div>
 
+          {/* Состав матрицы — фактом, а не одной строкой с перечислением: до запуска это
+              единственное, что отвечает на вопрос «а что именно сейчас проверится». */}
+          {matrix ? (
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <Spec label="Сценариев" value={matrix.total} />
+              <Spec label="Направления" value={matrix.countries.join(", ")} />
+              <Spec label="Города вылета" value={matrix.departure_cities.join(", ")} />
+            </div>
+          ) : (
+            <p className="mt-4 text-xs text-muted">Загружаю матрицу…</p>
+          )}
+
           <p className="mt-3 text-xs text-muted">
-            Матрица задаётся файлом <code className="text-ink">scenarios.yaml</code> в корне
-            проекта — направления, глубина дат и режимы правятся там.
+            Один сценарий — это направление × режим × окно дат. Список правится в файле{" "}
+            <code className="text-ink">scenarios.yaml</code> в корне проекта.
+            {hasHotels && (
+              <> Режим «Отели» читается браузером и идёт заметно дольше туров —
+              обход с ним занимает минуты, а не секунды.</>
+            )}
           </p>
         </GlassCard>
 
         {error && (
           <GlassCard variants={fadeUp} className="p-5 text-sm text-rose-300">{error}</GlassCard>
+        )}
+
+        {state && !state.running && !state.finished_at && (
+          <GlassCard variants={fadeUp} className="p-8">
+            <p className="text-center text-sm text-muted">
+              Обход ещё не запускался. Результаты появятся здесь, а находки — на экране
+              «История».
+            </p>
+          </GlassCard>
         )}
 
         {state && (state.running || state.finished_at) && (
@@ -136,6 +160,15 @@ export default function SweepPage() {
           </GlassCard>
         )}
       </m.div>
+    </div>
+  );
+}
+
+function Spec({ label, value }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="truncate text-sm font-semibold text-ink" title={String(value)}>{value}</div>
     </div>
   );
 }
