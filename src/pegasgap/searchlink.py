@@ -9,6 +9,11 @@
     /search/from-<город>-to-<страна>-for-<месяц>-nights-<мин>..<макс>
             -adults-<N>-kids-<возрасты|zero>
         ?datefrom=ДД/ММ/ГГГГ&dateto=ДД/ММ/ГГГГ&currency=RUB&ticketsincluded=<bool>
+        &operators=<id ТО>&hotels=<id отеля>
+
+Фильтры по оператору и отелю обязательны по смыслу: без них ссылка открывает выдачу на
+сотни строк, и находку в ней надо ещё разыскать. Имена параметров сняты перебором —
+`f_to_id` и `visibleOperators` формы не меняют, работает именно `operators`.
 
 Город, страна и месяц в пути — **английские**, и это главная ловушка: составные имена
 пишутся через ПОДЧЁРКИВАНИЕ, потому что дефис у площадки разделяет поля пути. На дефисе
@@ -73,6 +78,17 @@ COUNTRY_NAMES = {
 }
 
 
+# Идентификаторы операторов в справочнике Слетать (`GetTourOperators`). Держим списком,
+# а не резолвим на каждую ссылку: это сетевой вызов ради одной строки, а набор операторов
+# у инструмента фиксированный. Незнакомый оператор фильтра не получает — ссылка просто
+# останется без него, но не соврёт про чужого.
+OPERATOR_IDS = {
+    "Pegas Touristik": 3,
+    "Coral Travel": 6,
+    "Sunmar": 54,
+}
+
+
 def slugify(name: str) -> str:
     """Английское имя → фрагмент пути.
 
@@ -86,11 +102,16 @@ def _kids(ages: list[int]) -> str:
     return ".".join(str(a) for a in ages) if ages else "zero"
 
 
-def search_url(params: SearchParams) -> str | None:
+def search_url(params: SearchParams, hotel_id: int | None = None) -> str | None:
     """Ссылка на тот же поиск. None — города или страны нет в словаре.
 
     Молчаливая подстановка чего-то похожего здесь недопустима: ссылка на соседний город
     выглядит рабочей и уводит разбор в сторону.
+
+    `operators` и `hotels` прижимают поиск к оператору и конкретному отелю — иначе по
+    ссылке открывается выдача на сотни строк, в которой находку ещё надо разыскать.
+    Имена параметров сняты с площадки перебором: `f_to_id` и `visibleOperators`, вопреки
+    ожиданию, форму не меняют, работает именно `operators`.
     """
     city = CITY_NAMES.get((params.departure_city or "").strip())
     country = COUNTRY_NAMES.get((params.destination_country or "").strip())
@@ -101,17 +122,23 @@ def search_url(params: SearchParams) -> str | None:
             f"-for-{_MONTHS[params.date_from.month - 1]}"
             f"-nights-{params.nights_min}..{params.nights_max}"
             f"-adults-{params.adults}-kids-{_kids(list(params.children_ages))}")
-    query = urlencode({
+    fields = {
         "datefrom": params.date_from.strftime("%d/%m/%Y"),
         "dateto": params.date_to.strftime("%d/%m/%Y"),
         "currency": params.currency,
         # Режим «отели» — это поиск без перелёта.
         "ticketsincluded": "true" if params.search_mode == "tours" else "false",
-    })
-    return f"{BASE}/{path}?{query}"
+    }
+    operator = params.operators[0] if params.operators else ""
+    operator_id = OPERATOR_IDS.get(operator.strip())
+    if operator_id:
+        fields["operators"] = operator_id
+    if hotel_id:
+        fields["hotels"] = hotel_id
+    return f"{BASE}/{path}?{urlencode(fields)}"
 
 
-def search_url_from_row(params: dict) -> str | None:
+def search_url_from_row(params: dict, hotel_id: int | None = None) -> str | None:
     """То же, но из сохранённого словаря параметров прогона (`params_json`)."""
     try:
         return search_url(SearchParams(
@@ -124,6 +151,7 @@ def search_url_from_row(params: dict) -> str | None:
             children_ages=list(params.get("children_ages") or []),
             search_mode=params.get("search_mode") or "tours",
             currency=params.get("currency") or "RUB",
-        ))
+            operators=list(params.get("operators") or []),
+        ), hotel_id=hotel_id)
     except (KeyError, ValueError):
         return None

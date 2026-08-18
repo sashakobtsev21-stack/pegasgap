@@ -222,6 +222,13 @@ def _full_gap(hotels: list[HotelOffer], status: OperatorStatus) -> HotelGap:
     )
 
 
+def _as_int(value: str | None) -> int | None:
+    try:
+        return int(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap], float | None]:
     """Отели, чья цена выбивается из обычного для этого прогона расхождения.
 
@@ -268,6 +275,10 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             checked_price=m.checked.price,
             currency=m.reference.currency,
             matched_name=m.checked.hotel_name,
+            # Идентификатор отеля в нашем каталоге приходит в самой выдаче. Он нужен
+            # ссылке на поиск, чтобы прижать её к конкретному отелю; у отельных пропусков
+            # его проставляет диагностика, а здесь отель у нас есть — берём как есть.
+            catalog_id=_as_int(m.checked.raw_label),
             note=(f"разница {diff:+.1f}% при обычной для прогона {offset:+.1f}% "
                   f"(±{band:.1f}) — отклонение {deviation:+.1f}%"),
         ))

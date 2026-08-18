@@ -14,10 +14,12 @@ def params(**over) -> SearchParams:
 
 
 def test_link_matches_the_live_format():
+    # Оператор в параметрах поиска по умолчанию Pegas — он же попадает в фильтр ссылки.
     assert search_url(params()) == (
         "https://sletat.ru/search/from-moscow-to-egypt-for-october-nights-7..7"
         "-adults-2-kids-zero"
-        "?datefrom=05%2F10%2F2026&dateto=12%2F10%2F2026&currency=RUB&ticketsincluded=true")
+        "?datefrom=05%2F10%2F2026&dateto=12%2F10%2F2026&currency=RUB"
+        "&ticketsincluded=true&operators=3")
 
 
 def test_compound_names_use_underscore_not_hyphen():
@@ -47,3 +49,22 @@ def test_unknown_place_gives_no_link_rather_than_a_wrong_one():
     """Ссылка на соседний город выглядит рабочей и уводит разбор в сторону."""
     assert search_url(params(departure_city="Урюпинск")) is None
     assert search_url(params(destination_country="Антарктида")) is None
+
+
+def test_link_pins_the_search_to_operator_and_hotel():
+    """Без фильтров ссылка открывает выдачу на сотни строк, и находку в ней надо ещё
+    разыскать — тогда она не экономит разбор, а лишь переносит его в браузер."""
+    url = search_url(params(operators=["Coral Travel"]), hotel_id=117470)
+    assert "operators=6" in url
+    assert "hotels=117470" in url
+
+
+def test_unknown_operator_leaves_the_filter_out_rather_than_guessing():
+    """Чужой оператор в фильтре — это разбор чужой выдачи под видом своей."""
+    url = search_url(params(operators=["Библио-Глобус"]), hotel_id=1)
+    assert "operators=" not in url
+    assert "hotels=1" in url
+
+
+def test_link_without_hotel_still_works():
+    assert "hotels=" not in search_url(params())
