@@ -30,11 +30,16 @@ export default function MonitorPage() {
   const [stored, setStored] = useState(null);
   const [worker, setWorker] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(false);
+  // Сколько строк тянем. Отчёт растёт быстрее, чем его разбирают: на живом обходе
+  // счётчик показывал 1379 находок, а таблица молча обрывалась на пятистах — и это
+  // читалось как «вот всё, что нашли». Порог поднимается кнопкой.
+  const [limit, setLimit] = useState(500);
 
   const reload = useCallback(() => {
-    getJson(`/api/findings?days=30&only_open=${onlyOpen}`).then(setStored).catch(() => {});
+    getJson(`/api/findings?days=30&only_open=${onlyOpen}&limit=${limit}`)
+      .then(setStored).catch(() => {});
     getJson("/api/worker").then(setWorker).catch(() => {});
-  }, [onlyOpen]);
+  }, [onlyOpen, limit]);
 
   useEffect(reload, [reload]);
   // Новая находка в потоке — подтягиваем накопленное, чтобы у строки появился id и с ней
@@ -83,10 +88,17 @@ export default function MonitorPage() {
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Проверено кейсов" value={queue.checked ?? 0} of={queue.total} />
-          <Stat label="Найдено несоответствий" value={summary.total ?? 0} tone="brand" />
-          <Stat label="Не разобрано" value={summary.open ?? 0} tone="amber" />
           <Stat label="Осталось в очереди" value={queue.pending ?? 0} />
+          <Stat label="Найдено за 30 дней" value={summary.total ?? 0} tone="brand" />
+          {/* Раньше рядом стояло «не разобрано», повторявшее предыдущую цифру один в
+              один, пока никто ничего не отметил. Прогресс разбора полезнее: он растёт. */}
+          <Stat label="Разобрано за 30 дней" value={summary.reviewed ?? 0} of={summary.total}
+                tone="amber" />
         </div>
+
+        <p className="mt-2 text-[11px] text-muted">
+          Кейсы считаются за всё время жизни очереди, находки — за последние 30 дней.
+        </p>
 
         {(liveState?.errors ?? worker?.errors ?? 0) > 0 && (
           <p className="mt-3 text-xs text-amber-300">
@@ -100,7 +112,10 @@ export default function MonitorPage() {
       <GlassCard variants={fadeUp} className="p-5">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <h2 className="text-base font-bold text-white">
-            Чего нет на Слетать{stored ? ` · ${stored.findings.length}` : ""}
+            Чего нет на Слетать
+            {stored ? (stored.findings.length < (summary.total ?? 0)
+              ? ` · показано ${stored.findings.length} из ${summary.total}`
+              : ` · ${stored.findings.length}`) : ""}
           </h2>
           <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted">
             <input
@@ -187,6 +202,15 @@ export default function MonitorPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {stored && stored.findings.length < (summary.total ?? 0) && (
+          <button
+            onClick={() => setLimit((n) => n + 1000)}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          >
+            Показать ещё · скрыто {summary.total - stored.findings.length}
+          </button>
         )}
       </GlassCard>
     </m.div>
