@@ -268,6 +268,12 @@ def set_reviewed(conn: sqlite3.Connection, gap_id: int, reviewed: bool = True) -
     return bool(cur.rowcount)
 
 
+# Отчёт отвечает на вопрос «чего нет у нас», и обратное направление в нём не участвует
+# (см. gaps.REPORT_REVERSE). Фильтр стоит на ЧТЕНИИ, а не удалением строк: прогоны,
+# сделанные до этого решения, остаются в базе целиком и доступны для разбора запросом.
+_REPORTED_KINDS = "g.kind <> 'reverse'"
+
+
 def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
              limit: int = 500) -> list[sqlite3.Row]:
     """Находки за период вместе с параметрами прогона — то, что показывает отчёт.
@@ -279,7 +285,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
                    r.search_mode, r.params_json
               FROM gaps g JOIN runs r ON r.id = g.run_id
-             WHERE r.run_at >= ? AND r.trustworthy = 1
+             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    {"AND g.reviewed = 0" if only_open else ""}
              ORDER BY g.reviewed ASC, r.run_at DESC
              LIMIT ?""",
@@ -290,10 +296,10 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
 def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
     """Счётчики для шапки: сколько найдено и сколько из этого уже разобрано."""
     row = conn.execute(
-        """SELECT COUNT(*) AS total,
-                  SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed
-             FROM gaps g JOIN runs r ON r.id = g.run_id
-            WHERE r.run_at >= ? AND r.trustworthy = 1""",
+        f"""SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed
+              FROM gaps g JOIN runs r ON r.id = g.run_id
+             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}""",
         (since.isoformat(timespec="seconds"),),
     ).fetchone()
     total = row["total"] or 0

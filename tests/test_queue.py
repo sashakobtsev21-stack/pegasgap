@@ -108,7 +108,7 @@ def test_seed_does_not_duplicate_or_forget(conn):
     иначе воркер вечно перепроверял бы одно и то же."""
     matrix = Matrix(routes=[("Москва", "ОАЭ")], modes=["tours"],
                     windows=[Window(30)], pax=[Pax()])
-    assert q.seed_from_matrix(conn, matrix, date(2026, 9, 1)) == 1
+    assert q.seed_from_matrix(conn, matrix, date(2026, 9, 1))[0] == 1
     case_id = q.next_case(conn).id
     q.mark_checked(conn, case_id, run_id=7, gaps=3)
 
@@ -124,7 +124,7 @@ def test_seed_expands_every_dimension(conn):
         modes=["tours", "hotels"], windows=[Window(30), Window(60)],
         pax=[Pax(adults=2), Pax(adults=3, children=[12])])
     # 2 маршрута × 2 режима × 2 окна × 2 состава
-    assert q.seed_from_matrix(conn, matrix, date(2026, 9, 1)) == 16
+    assert q.seed_from_matrix(conn, matrix, date(2026, 9, 1))[0] == 16
 
 
 def test_seed_order_becomes_priority(conn):
@@ -259,3 +259,71 @@ async def test_finding_event_does_not_collide_with_event_kind(tmp_path):
     assert findings, "находка не доехала до шины"
     assert findings[0]["gap_kind"] == GapKind.HOTEL.value
     assert worker.state.errors == 0
+
+
+async def test_worker_stops_when_the_platform_is_down(tmp_path):
+    """Если площадка легла, проверка не состоится ни на одном кейсе. Продолжать нельзя:
+    воркер пройдёт всю очередь, пометит каждый кейс проверенным и не проверит ничего —
+    потерянный обход хуже остановки, потому что выглядит как выполненный."""
+    from pegasgap.worker import MAX_CONSECUTIVE_FAILURES, Worker
+    db = tmp_path / "w.db"
+    with storage.session(db) as c:
+        for i in range(MAX_CONSECUTIVE_FAILURES + 5):
+            q.add_case(c, departure_city="Москва", country=f"Страна{i}",
+                       search_mode="tours", date_from=date(2026, 9, 1),
+                       date_to=date(2026, 9, 8), nights=7)
+
+    calls = 0
+
+    async def down(case):
+        nonlocal calls
+        calls += 1
+        scan = make_scan(gaps=0)
+        scan.problems = ["эталон: поиск не удался — HTTP 401"]
+        return 1, scan
+
+    worker = Worker(db_path=db, scan_runner=down, pause_s=0.01, idle_s=0.01)
+    worker.start()
+    for _ in range(80):
+        if not worker.state.running:
+            break
+        await _tick()
+    await worker.stop()
+
+    assert calls == MAX_CONSECUTIVE_FAILURES     # остановился, а не съел очередь
+    assert worker.state.stopped_reason
+    assert "легла" in worker.state.stopped_reason
+    with storage.session(db) as c:
+        assert q.stats(c)["pending"] >= 5        # непроверенные остались непроверенными
+
+
+async def test_untrustworthy_data_does_not_stop_the_worker(tmp_path):
+    """Сомнительные данные — свойство направления, а не площадки: следующее может быть
+    в порядке, и останавливаться из-за этого нельзя."""
+    from pegasgap.worker import Worker
+    db = tmp_path / "w.db"
+    with storage.session(db) as c:
+        for i in range(4):
+            q.add_case(c, departure_city="Москва", country=f"Страна{i}",
+                       search_mode="tours", date_from=date(2026, 9, 1),
+                       date_to=date(2026, 9, 8), nights=7)
+
+    calls = 0
+
+    async def shaky(case):
+        nonlocal calls
+        calls += 1
+        scan = make_scan(gaps=0)
+        scan.problems = ["цены сторон систематически расходятся на -48%"]
+        return 1, scan
+
+    worker = Worker(db_path=db, scan_runner=shaky, pause_s=0.01, idle_s=0.01)
+    worker.start()
+    for _ in range(80):
+        if calls >= 4:
+            break
+        await _tick()
+    await worker.stop()
+
+    assert calls == 4                            # прошёл всё, не остановился
+    assert worker.state.stopped_reason is None

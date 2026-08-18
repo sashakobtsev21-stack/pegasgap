@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { m } from "framer-motion";
-import {
-  CheckCircle2, Circle, ListPlus, Loader2, Pause, Play, Radar, Wifi, WifiOff,
-} from "lucide-react";
+import { CheckCircle2, Circle, Loader2, Radar, Wifi, WifiOff } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
 import { formatDate, formatShortDateTime } from "../lib/format.js";
@@ -10,12 +8,14 @@ import { getJson, postJson } from "../lib/api.js";
 import { useEventStream } from "../lib/stream.js";
 
 /**
- * MonitorPage — главный экран: круглосуточная проверка и её находки.
+ * MonitorPage — отчёт, который наполняется по ходу проверки.
  *
- * Живой поток, а не опрос: процесс работает часами, и вопрос «что происходит прямо
- * сейчас» важнее, чем «сколько сделано». Свежие находки приходят потоком и падают
- * наверх списка; накопленные подтягиваются из базы, чтобы экран не был пустым до
- * первой находки текущей сессии.
+ * Только отчёт: запускают проверки на «Проверке», разбирают подробности в «Логах».
+ * Экран, на котором и пульт, и результат, плох тем, что во время долгого прогона
+ * половина его занята кнопками, которые уже нажали.
+ *
+ * Живой поток, а не опрос: находки падают наверх списка по мере появления, накопленные
+ * подтягиваются из базы — иначе до первой находки текущей сессии экран был бы пустым.
  */
 const KIND_TONE = {
   full: "border-rose-400/30 bg-rose-500/15 text-rose-200",
@@ -29,8 +29,6 @@ export default function MonitorPage() {
   const { findings: live, state: liveState, connected } = useEventStream();
   const [stored, setStored] = useState(null);
   const [worker, setWorker] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(false);
 
   const reload = useCallback(() => {
@@ -46,33 +44,6 @@ export default function MonitorPage() {
   const running = liveState?.running ?? worker?.running ?? false;
   const queue = worker?.queue || stored?.summary?.queue || {};
   const summary = stored?.summary || {};
-
-  async function control(action) {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await postJson(`/api/worker/${action}`, {}, { timeoutMs: 120_000 });
-      setWorker(next);
-    } catch (e) {
-      setError(String(e.message || e));
-    } finally {
-      setBusy(false);
-      reload();
-    }
-  }
-
-  async function seed() {
-    setBusy(true);
-    setError(null);
-    try {
-      await postJson("/api/queue/seed", {}, { timeoutMs: 60_000 });
-    } catch (e) {
-      setError(String(e.message || e));
-    } finally {
-      setBusy(false);
-      reload();
-    }
-  }
 
   async function toggleReview(finding) {
     const next = !finding.reviewed;
@@ -101,30 +72,13 @@ export default function MonitorPage() {
             <p className="truncate text-xs text-muted">
               {running
                 ? (liveState?.current || worker?.current || "готовлюсь…")
-                : "остановлен — очередь ждёт запуска"}
+                : "проверка не идёт — запустить можно на вкладке «Проверка»"}
             </p>
           </div>
           <span className={`ml-auto flex items-center gap-1.5 text-xs ${connected ? "text-emerald-300" : "text-muted"}`}>
             {connected ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
             {connected ? "поток live" : "поток оборван"}
           </span>
-          <button
-            onClick={seed}
-            disabled={busy}
-            title="Пересобрать очередь из scenarios.yaml"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-muted transition-colors hover:text-ink disabled:opacity-50"
-          >
-            <ListPlus className="size-4" /> Собрать очередь
-          </button>
-          <button
-            onClick={() => control(running ? "stop" : "start")}
-            disabled={busy}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-ocean px-4 py-2.5 text-sm font-bold text-white shadow-glow transition-opacity hover:opacity-95 disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" />
-                  : running ? <Pause className="size-4" /> : <Play className="size-4" />}
-            {running ? "Остановить" : "Запустить"}
-          </button>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -134,9 +88,8 @@ export default function MonitorPage() {
           <Stat label="Осталось в очереди" value={queue.pending ?? 0} />
         </div>
 
-        {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
         {(liveState?.errors ?? worker?.errors ?? 0) > 0 && (
-          <p className="mt-2 text-xs text-amber-300">
+          <p className="mt-3 text-xs text-amber-300">
             Сбоев на кейсах: {liveState?.errors ?? worker?.errors}
             {(liveState?.last_error || worker?.last_error) &&
               ` — последний: ${liveState?.last_error || worker?.last_error}`}

@@ -443,10 +443,11 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
         with storage.session(db_path) as conn:
-            seeded = case_queue.seed_from_matrix(conn, matrix)
+            seeded, retired = case_queue.seed_from_matrix(conn, matrix)
             queue_stats = case_queue.stats(conn)
-        bus.log(f"Очередь пересобрана из конфига: {seeded} кейсов")
-        return {"seeded": seeded, "stats": queue_stats}
+        bus.log(f"Очередь сверена с конфигом: {seeded} актуальных"
+                + (f", {retired} отключено" if retired else ""))
+        return {"seeded": seeded, "retired": retired, "stats": queue_stats}
 
     @app.get("/api/findings")
     async def findings(days: int = 7, only_open: bool = False, limit: int = 500) -> dict:

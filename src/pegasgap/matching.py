@@ -163,9 +163,18 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+# На сколько звёзд площадки могут разойтись, не вызывая подозрений. Живой обход по
+# Грузии показал «ORBI BEACH TOWER ≈ Orbi Beach Tower (4 и 3)» и «IVERIA INN ≈ Iveria Inn
+# (4 и 3)»: имя совпадает буквально, а звёзды отличаются на одну — это расхождение в
+# данных площадок, а не разные объекты. Две звезды — уже повод присмотреться.
+_STARS_TOLERANCE = 1
+
+
 def _stars_conflict(a: HotelOffer, b: HotelOffer) -> bool:
-    """True, если звёздность явно противоречит. Неизвестная не противоречит ничему."""
-    return bool(a.stars and b.stars and a.stars != b.stars)
+    """True, если звёздность противоречит. Неизвестная не противоречит ничему."""
+    if not (a.stars and b.stars):
+        return False
+    return abs(a.stars - b.stars) > _STARS_TOLERANCE
 
 
 def _pair_confidence(ca: str, cb: str) -> Confidence:

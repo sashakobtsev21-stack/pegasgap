@@ -154,7 +154,8 @@ def test_hotel_gap_for_missing_hotel():
     assert [g.hotel_name for g in hotel_gaps] == ["B Grand"]
 
 
-def test_reverse_gap_reported_separately():
+def test_reverse_gap_reported_when_switched_on(monkeypatch):
+    monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")])
     chk = result("sletat", [
         hotel("A Palace", "100000", "sletat"),
@@ -233,13 +234,13 @@ def test_clean_run_is_trustworthy():
 
 def test_weak_match_lands_in_review_not_in_gaps():
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor", stars=5)])
-    chk = result("sletat", [hotel("A Palace", "100000", "sletat", stars=4)])
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat", stars=3)])
     scan = detect(PARAMS, ref, chk)
     assert scan.gaps_of(GapKind.HOTEL) == []
     assert len(scan.unmatched) == 1
 
 
-def test_lopsided_coverage_suppresses_reverse_noise():
+def test_lopsided_coverage_suppresses_reverse_noise(monkeypatch):
     """Регресс живого прогона: эталон показал 14 отелей, наша сторона 962 — и инструмент
     выдал 949 «обратных пропусков», похоронив под ними настоящие находки.
 
@@ -248,6 +249,7 @@ def test_lopsided_coverage_suppresses_reverse_noise():
     недостоверным каждый прогон и обесценить инструмент целиком. Прямое направление
     (отель есть на эталоне, у нас нет) от перекоса не страдает.
     """
+    monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(3)])
     chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(3)]
                  + [hotel(f"Extra {i}", "100000", "sletat") for i in range(40)])
@@ -278,7 +280,8 @@ def test_truncated_collection_is_still_a_problem():
     assert not scan.trustworthy
 
 
-def test_comparable_coverage_still_reports_reverse():
+def test_comparable_coverage_still_reports_reverse(monkeypatch):
+    monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(10)])
     chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(10)]
                  + [hotel("Extra", "100000", "sletat")])
@@ -340,3 +343,15 @@ def test_plausible_offset_still_yields_findings():
     scan = detect(PARAMS, ref, chk)
     assert [g.hotel_name for g in scan.gaps_of(GapKind.PRICE)] == ["H9"]
     assert scan.trustworthy
+
+
+def test_reverse_gaps_are_off_by_default():
+    """Живой обход дал 587 обратных пропусков из 641 находки: витрина показывает по
+    оператору выборку, мы отдаём каталог целиком, и каждый лишний отель у нас становился
+    «находкой». Инструмент ищет, чего нет У НАС, — зеркало топит настоящие находки."""
+    ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")])
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat"),
+                            hotel("C Beach", "95000", "sletat")])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.gaps_of(GapKind.REVERSE) == []
+    assert any("обратные пропуски не показаны" in n for n in scan.notes)

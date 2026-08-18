@@ -140,7 +140,9 @@ def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
         """INSERT INTO cases (case_key, departure_city, country, search_mode,
                               date_from, date_to, nights, adults, children_ages, priority)
            VALUES (?,?,?,?,?,?,?,?,?,?)
-           ON CONFLICT(case_key) DO UPDATE SET priority = excluded.priority""",
+           ON CONFLICT(case_key) DO UPDATE SET
+               priority = excluded.priority,
+               enabled = 1""",
         (key, departure_city, country, search_mode, date_from.isoformat(),
          date_to.isoformat(), nights, adults,
          json.dumps(children_ages), priority),
@@ -215,18 +217,31 @@ def clear(conn: sqlite3.Connection) -> int:
     return cur.rowcount or 0
 
 
-def seed_from_matrix(conn: sqlite3.Connection, matrix, today: date | None = None) -> int:
-    """Засеять очередь из матрицы. Возвращает число кейсов.
+def seed_from_matrix(conn: sqlite3.Connection, matrix,
+                    today: date | None = None) -> tuple[int, int]:
+    """Привести очередь в соответствие конфигу. Возвращает (актуальных, отключённых).
 
-    Приоритет берётся из ПОРЯДКА маршрутов в конфиге: `pegasgap top` выписывает их по
-    убыванию объёма оператора, и полагаться на этот порядок дешевле, чем хранить объёмы
-    отдельной таблицей и следить за их свежестью. Правишь порядок руками — меняешь
-    приоритет, и это видно в диффе конфига.
+    Именно ПРИВЕСТИ, а не дополнить. Первая версия только добавляла, и очередь копила
+    мёртвые кейсы: направления, убранные из конфига, продолжали проверяться и жечь квоту
+    поисков. Живой пример — ОАЭ, Кипр и Индонезия остались в работе после того, как их
+    исключили за отсутствием оператора на эталоне.
+
+    Лишние именно ОТКЛЮЧАЮТСЯ, а не удаляются: с ними связана история находок, и стирать
+    её из-за правки конфига нельзя. Вернут направление обратно — вернётся и его прошлое.
+
+    Приоритет берётся из ПОРЯДКА маршрутов: `pegasgap top` выписывает их по убыванию
+    объёма оператора, и полагаться на порядок дешевле, чем хранить объёмы отдельной
+    таблицей и следить за их свежестью. Правишь порядок руками — меняешь приоритет,
+    и это видно в диффе конфига.
     """
     routes = matrix.pairs()
     weight = {pair: len(routes) - i for i, pair in enumerate(routes)}
-    seeded = 0
+    wanted: list[str] = []
     for params in matrix.build(today):
+        wanted.append(case_key(
+            params.departure_city, params.destination_country, params.search_mode,
+            params.date_from, params.date_to, params.nights_min, params.adults,
+            list(params.children_ages)))
         add_case(
             conn,
             departure_city=params.departure_city,
@@ -239,5 +254,8 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix, today: date | None = None
             children_ages=list(params.children_ages),
             priority=weight.get((params.departure_city, params.destination_country), 0),
         )
-        seeded += 1
-    return seeded
+    placeholders = ",".join("?" * len(wanted)) or "NULL"
+    cur = conn.execute(
+        f"UPDATE cases SET enabled = 0 WHERE enabled = 1 AND case_key NOT IN ({placeholders})",
+        wanted)
+    return len(wanted), cur.rowcount or 0

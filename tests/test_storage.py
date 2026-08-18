@@ -103,3 +103,18 @@ def test_gap_key_is_stable_across_objects():
 def test_different_kinds_are_different_findings():
     """Один отель может дать и пропуск, и расхождение цены — это разные случаи."""
     assert gap("A", GapKind.HOTEL).key() != gap("A", GapKind.PRICE).key()
+
+
+def test_report_hides_reverse_gaps_from_older_runs(conn):
+    """Прогоны, сделанные до решения об обратных пропусках, лежат в базе как есть —
+    587 строк из 703. Отчёт их не показывает и не считает, но данные остаются:
+    фильтр стоит на чтении, а не удалением строк."""
+    run_id = storage.save_scan(conn, scan([
+        gap("A Palace"),
+        gap("B Resort", GapKind.REVERSE),
+    ]))
+    since = datetime.now() - timedelta(days=1)
+
+    assert [r["hotel_name"] for r in storage.findings(conn, since)] == ["A Palace"]
+    assert storage.findings_summary(conn, since)["total"] == 1
+    assert len(storage.gaps_of_run(conn, run_id)) == 2

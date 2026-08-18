@@ -61,8 +61,9 @@ def test_short_core_containment_is_not_strong():
 
 def test_stars_conflict_downgrades_to_weak():
     # Одно имя, разные звёзды: либо ошибка данных, либо разные объекты сети.
-    # Пропуском объявлять нельзя — только в проверку.
-    conf, reason = compare(h("Rixos Premium", stars=5), h("Rixos Premium", stars=4))
+    # Пропуском объявлять нельзя — только в проверку. Одна звезда допускается
+    # (см. _STARS_TOLERANCE), две — уже расхождение.
+    conf, reason = compare(h("Rixos Premium", stars=5), h("Rixos Premium", stars=3))
     assert conf is Confidence.WEAK
     assert "звёзды" in reason
 
@@ -102,7 +103,7 @@ def test_weak_match_is_not_a_gap():
     """Сомнительное совпадение уходит в проверку, а не в пропуски: выдуманный пропуск
     дороже пропущенного."""
     res = match_hotels([h("Rixos Premium", stars=5)],
-                       [h("Rixos Premium", stars=4, provider="sletat")])
+                       [h("Rixos Premium", stars=3, provider="sletat")])
     assert not res.only_reference          # НЕ пропуск
     assert not res.pairs                   # и не сравнимая пара
     assert len(res.review) == 1
@@ -170,3 +171,18 @@ def test_ex_name_in_parentheses_is_not_an_alternate_spelling():
     """Приписка (ex. …) — ПРОШЛОЕ имя, а не второе написание нынешнего. Сойтись по нему
     с чужим объектом нельзя."""
     assert not compare(h("Rixos Sharm (ex. Premier Royal)"), h("Premier Royal"))[0].comparable
+
+
+def test_one_star_apart_is_a_data_discrepancy_not_a_different_hotel():
+    """Живой обход по Грузии: «ORBI BEACH TOWER ≈ Orbi Beach Tower (4 и 3)»,
+    «IVERIA INN ≈ Iveria Inn (4 и 3)». Имя совпадает буквально — площадки просто
+    разошлись в звёздности, и уводить такие пары в проверку значит терять их."""
+    assert compare(h("ORBI BEACH TOWER", stars=4), h("Orbi Beach Tower", stars=3))[0] \
+        is Confidence.EXACT
+    assert compare(h("IVERIA INN", stars=4), h("Iveria Inn", stars=3))[0] is Confidence.EXACT
+
+
+def test_two_stars_apart_still_needs_a_human():
+    conf, reason = compare(h("Rixos Premium", stars=5), h("Rixos Premium", stars=3))
+    assert conf is Confidence.WEAK
+    assert "звёзды" in reason

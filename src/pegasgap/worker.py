@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +46,21 @@ IDLE_PAUSE_S = 60.0
 MIN_RECHECK_HOURS = 12.0
 
 _RATE_LIMIT_MARK = "превышен лимит"
+# Сколько подряд неисполнимых проверок считать системным сбоем. Одна-две — случайность
+# конкретного направления; несколько подряд означают, что легла площадка, и продолжать
+# нельзя: воркер пройдёт всю очередь, пометит каждый кейс проверенным и не проверит
+# ничего. Потерянный обход хуже остановки, потому что выглядит как выполненный.
+MAX_CONSECUTIVE_FAILURES = int(os.environ.get("PEGASGAP_MAX_FAILURES") or 3)
+
+
+def _not_executed(scan: ScanResult) -> bool:
+    """Проверка не состоялась: площадка не ответила, а не «данные сомнительные».
+
+    Отличать важно. Сомнительные данные — это свойство направления, следующее может быть
+    в порядке. Неотвеченная площадка — свойство площадки, и следующее направление
+    получит ровно то же самое.
+    """
+    return any("не выполнена" in p or "поиск не удался" in p for p in scan.problems)
 
 
 @dataclass
@@ -53,6 +69,7 @@ class WorkerState:
 
     running: bool = False
     paused_until: datetime | None = None
+    stopped_reason: str | None = None
     current: str | None = None
     started_at: datetime | None = None
     checked: int = 0
@@ -71,6 +88,7 @@ class WorkerState:
             "gaps": self.gaps,
             "errors": self.errors,
             "last_error": self.last_error,
+            "stopped_reason": self.stopped_reason,
         }
 
 
@@ -167,6 +185,7 @@ class Worker:
             pass
 
     async def _loop(self) -> None:
+        failures_in_row = 0
         try:
             while not self._stop.is_set():
                 with storage.session(self.db_path) as conn:
@@ -188,6 +207,7 @@ class Worker:
                     run_id, scan = await self._scan(case)
                 except Exception as exc:
                     self.state.errors += 1
+                    failures_in_row += 1
                     self.state.last_error = f"{type(exc).__name__}: {exc}"
                     log.exception("кейс %s упал", case.title)
                     bus.log(f"Сбой на «{case.title}»: {self.state.last_error}",
@@ -202,11 +222,20 @@ class Worker:
                         mark_checked(conn, case.id, run_id, len(scan.gaps))
                     _finding_events(case, scan, run_id)
                     self._report(case, scan)
+                    failures_in_row = failures_in_row + 1 if _not_executed(scan) else 0
                     if _is_rate_limited(scan):
                         pause = self.rate_limit_pause_s
                         self.state.paused_until = datetime.now()
                         bus.log(f"Площадка ограничила частоту запросов — пауза "
                                 f"{self.rate_limit_pause_s:.0f} с", level="warn")
+
+                if failures_in_row >= MAX_CONSECUTIVE_FAILURES:
+                    self.state.stopped_reason = (
+                        f"{failures_in_row} проверки подряд не состоялись — похоже, легла "
+                        f"площадка. Обход остановлен, чтобы не пройти очередь впустую: "
+                        f"последняя причина — {self.state.last_error or 'см. логи'}")
+                    bus.log(self.state.stopped_reason, level="error")
+                    break
 
                 bus.publish("state", **self.state.as_dict())
                 await self._sleep(pause)
@@ -219,7 +248,9 @@ class Worker:
     def _report(self, case: Case, scan: ScanResult) -> None:
         """Одна строка итога в лог — чтобы по логу читалась картина без отчёта."""
         if not scan.trustworthy:
-            bus.log(f"  ↳ прогон недостоверен: {'; '.join(scan.problems)}", level="warn")
+            level = "error" if _not_executed(scan) else "warn"
+            bus.log(f"  ↳ прогон недостоверен: {'; '.join(scan.problems)}", level=level)
+            self.state.last_error = "; ".join(scan.problems)[:200]
             return
         if not scan.gaps:
             bus.log("  ↳ расхождений нет", level="dim")
