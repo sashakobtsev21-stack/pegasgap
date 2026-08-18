@@ -122,3 +122,51 @@ def test_matched_share_reflects_coverage():
     checked = [h("A Palace Resort", provider="sletat")]
     res = match_hotels(reference, checked)
     assert res.matched_share == 1 / 3
+
+
+# --------------------------------- русские названия ---------------------------------
+# Случаи ниже взяты из живого прогона по России, где сопоставилось лишь 20% отелей.
+
+
+def test_single_letter_core_matches_nothing():
+    """«А-Отель» после вычистки шума превращался в «а», и этот символ входил в половину
+    названий: живой прогон дал «ЭРА CПА → А-Отель» и «В ЁЛКАХ → А-Отель»."""
+    assert compare(h("ЭРА CПА"), h("А-Отель"))[0] is Confidence.NONE
+    assert compare(h("В ЁЛКАХ"), h("А-Отель"))[0] is Confidence.NONE
+    assert compare(h("КРУИЗ ПИОНЕРСКИЙ"), h("Гостиница Н"))[0] is Confidence.NONE
+
+
+def test_latin_lookalike_inside_cyrillic_word_is_fixed():
+    """В «ЭРА CПА» буква C латинская: на вид не отличить, а для сравнения это другое
+    слово."""
+    assert normalize("ЭРА CПА") == normalize("ЭРА СПА")   # первая C латинская
+    assert compare(h("ЭРА CПА"), h("Эра Спа"))[0] is Confidence.EXACT
+
+
+def test_genuinely_latin_name_is_left_alone():
+    """Правка гомоглифов не должна портить честно латинское название."""
+    assert compare(h("SALVE"), h("Salve"))[0] is Confidence.EXACT
+    assert "а" not in normalize("SALVE")                  # не подменили на кириллицу
+
+
+def test_alternate_spelling_in_parentheses_matches():
+    """«SALVE (САЛЬВЭ)» и «БЭСЭДЭР (BESEDER)» — одно имя двумя алфавитами, и площадки
+    выбирают из них по-разному."""
+    assert compare(h("SALVE (САЛЬВЭ)"), h("Сальвэ"))[0].comparable
+    assert compare(h("БЭСЭДЭР (BESEDER)"), h("Beseder"))[0].comparable
+    assert compare(h("БЭСЭДЭР (BESEDER)"), h("Бэсэдэр"))[0].comparable
+
+
+def test_russian_noise_words_are_stripped():
+    assert compare(h("АЛЬБЕРТИНА ГОСТЕВОЙ ДОМ"), h("Альбертина"))[0].comparable
+    assert compare(h("ЭЛИЗА ЗАРКАУ"), h("Гостевой дом Элиза Заркау"))[0].comparable
+
+
+def test_city_suffix_still_matches_by_containment():
+    assert compare(h("БАЛТИКА КАЛИНИНГРАД"), h("Балтика Калининград"))[0] is Confidence.EXACT
+
+
+def test_ex_name_in_parentheses_is_not_an_alternate_spelling():
+    """Приписка (ex. …) — ПРОШЛОЕ имя, а не второе написание нынешнего. Сойтись по нему
+    с чужим объектом нельзя."""
+    assert not compare(h("Rixos Sharm (ex. Premier Royal)"), h("Premier Royal"))[0].comparable

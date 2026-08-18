@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import sys
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -30,7 +31,13 @@ from pegasgap.logging_setup import configure_logging
 from pegasgap.models import PEGAS, GapKind, ScanResult, SearchParams
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.providers.sletat_api import GATEWAY_CITY
-from pegasgap.ranking import RouteVolume, VolumeProbe, client_factory, to_yaml_routes
+from pegasgap.ranking import (
+    RouteVolume,
+    VolumeProbe,
+    client_factory,
+    reference_has_operator,
+    to_yaml_routes,
+)
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 
 app = typer.Typer(add_completion=False, help="Мониторинг пропусков туроператора на выдаче Слетать.")
@@ -221,7 +228,7 @@ def top(
     остаётся за человеком и видно в истории изменений конфига.
     """
     configure_logging(logging.WARNING)   # замер шумный, а нужен только его результат
-    routes, skipped = asyncio.run(
+    routes, skipped, absent = asyncio.run(
         _measure_top(limit, departure, nights, offset, operator_id))
 
     table = Table(title=f"Направления по объёму оператора · вылет из «{departure}»",
@@ -232,6 +239,14 @@ def top(
     for i, volume in enumerate(routes, 1):
         table.add_row(str(i), volume.country, str(volume.rows))
     console.print(table)
+
+    if absent:
+        console.print(f"\n[yellow]Пропущены — оператора нет на эталоне ({len(absent)}):[/yellow]")
+        for volume in absent:
+            console.print(f"  • {volume.country} [dim]— у нас {volume.rows} предложений, "
+                          f"а на витрине по этому оператору ничего[/dim]")
+        console.print("[dim]Мониторить такое нечем: эталон пуст, сравнивать не с чем, "
+                      "а квоту поисков направление тратит наравне с рабочим.[/dim]")
 
     if skipped:
         console.print(f"\n[yellow]Не удалось замерить ({len(skipped)}):[/yellow]")
@@ -247,11 +262,12 @@ def top(
 
 
 async def _measure_top(limit: int, departure: str, nights: int, offset: int,
-                       operator_id: int) -> tuple[list[RouteVolume], list[RouteVolume]]:
-    """Два шага: отсечь страны, где оператора нет, затем замерить оставшиеся.
+                       operator_id: int) -> tuple[list[RouteVolume], list[RouteVolume],
+                                                  list[RouteVolume]]:
+    """Три шага: отсечь страны без оператора, замерить объём, сверить с эталоном.
 
     Первый шаг почти бесплатный и снимает четыре пятых работы: из сотни стран у
-    оператора активны единицы.
+    оператора активны единицы. Третий отсекает направления, где сравнивать не с чем.
     """
     probe = VolumeProbe(operator_id=operator_id, nights=nights, offset_days=offset)
     async with client_factory() as client:
@@ -263,11 +279,23 @@ async def _measure_top(limit: int, departure: str, nights: int, offset: int,
             raise typer.BadParameter("оператор не активен ни в одной стране")
         console.print(f"[dim]    активен в {len(countries)}: {', '.join(countries)}[/dim]")
 
-        console.print(f"[dim]2/2 замеряю объём по {len(countries)} странам…[/dim]")
+        console.print(f"[dim]2/3 замеряю объём по {len(countries)} странам…[/dim]")
         measured = await probe.rank(client, [(departure, c) for c in countries])
 
-    return ([v for v in measured if v.has_volume][:limit],
-            [v for v in measured if not v.measured])
+    with_volume = [v for v in measured if v.has_volume]
+    console.print(f"[dim]3/3 проверяю, есть ли оператор на эталоне "
+                  f"({len(with_volume)} направлений)…[/dim]")
+    # Наш объём — только половина ответа. Направление, где оператора нет на витрине,
+    # мониторить бессмысленно: сравнивать не с чем, а квоту поисков оно жжёт наравне с
+    # рабочим. Живой пример — ОАЭ: у нас 9289 предложений, у него на витрине ноль.
+    checked = await asyncio.gather(*(
+        reference_has_operator(v.country, PEGAS) for v in with_volume))
+    with_volume = [replace(v, on_reference=ok) for v, ok in zip(with_volume, checked,
+                                                                strict=True)]
+
+    return ([v for v in with_volume if v.on_reference is not False][:limit],
+            [v for v in measured if not v.measured],
+            [v for v in with_volume if v.on_reference is False])
 
 
 @app.command()

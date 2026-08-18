@@ -82,6 +82,9 @@ class RouteVolume:
     rows: int | None          # None = замерить не удалось (таймаут или отказ)
     seconds: float = 0.0
     error: str = ""           # чем именно ответил шлюз, если не получилось
+    # Есть ли у оператора предложения на ЭТАЛОНЕ. None = не проверяли.
+    # Направление, где эталон пуст, мониторить бессмысленно: сравнивать не с чем.
+    on_reference: bool | None = None
 
     @property
     def measured(self) -> bool:
@@ -233,3 +236,35 @@ def to_yaml_routes(routes: list[RouteVolume]) -> str:
         lines.append(f"  - {{from: {route.departure_city}, country: {route.country}}}"
                      f"    # предложений у оператора: {route.rows}")
     return "\n".join(lines)
+
+
+async def reference_has_operator(country: str, operator: str,
+                                 nights: int = 7, offset_days: int = 30) -> bool | None:
+    """Есть ли у оператора предложения на ЭТАЛОНЕ по этому направлению.
+
+    Без этой проверки ранжирование ошибается систематически. Живой пример: по ОАЭ у
+    оператора на нашей стороне девять тысяч предложений — первое место в списке, — а на
+    витрине по нему ноль при 981 отеле от других ТО. Оператор туда просто не продаёт
+    через эту площадку, сравнивать не с чем, и все кейсы по ОАЭ уходили впустую, сжигая
+    квоту поисков.
+
+    None = проверить не удалось; такое направление не выбрасываем, а помечаем.
+    """
+    from pegasgap.models import PEGAS, SearchParams
+    from pegasgap.providers import get_provider, load_providers
+
+    load_providers()
+    depart = date.today() + timedelta(days=offset_days)
+    params = SearchParams(
+        departure_city="Москва", destination_country=country,
+        date_from=depart, date_to=depart + timedelta(days=nights),
+        nights_min=nights, nights_max=nights, adults=2,
+        operators=[operator or PEGAS],
+    )
+    try:
+        result = await get_provider("tourvisor_api")().search(params)
+    except Exception:
+        return None
+    if not result.success:
+        return None
+    return bool(result.hotel_offers or result.offers)
