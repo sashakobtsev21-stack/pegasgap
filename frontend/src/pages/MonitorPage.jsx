@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { m } from "framer-motion";
-import { CheckCircle2, Circle, Loader2, Radar, Wifi, WifiOff } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, Loader2, Radar, Wifi, WifiOff }
+  from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
 import { formatDate, formatShortDateTime } from "../lib/format.js";
 import { getJson, postJson } from "../lib/api.js";
 import { useEventStream } from "../lib/stream.js";
+import { groupFindings, plural } from "../lib/grouping.js";
 
 /**
  * MonitorPage — отчёт, который наполняется по ходу проверки.
@@ -34,6 +36,7 @@ export default function MonitorPage() {
   // счётчик показывал 1379 находок, а таблица молча обрывалась на пятистах — и это
   // читалось как «вот всё, что нашли». Порог поднимается кнопкой.
   const [limit, setLimit] = useState(500);
+  const [open, setOpen] = useState(() => new Set());   // раскрытые группы
 
   const reload = useCallback(() => {
     getJson(`/api/findings?days=30&only_open=${onlyOpen}&limit=${limit}`)
@@ -49,6 +52,22 @@ export default function MonitorPage() {
   const running = liveState?.running ?? worker?.running ?? false;
   const queue = worker?.queue || stored?.summary?.queue || {};
   const summary = stored?.summary || {};
+
+  /** Отметить всю группу: одна проблема разбирается один раз, а не по разу на вариант. */
+  async function toggleGroup(group) {
+    const next = !group.reviewed;
+    const ids = new Set(group.items.map((f) => f.id));
+    setStored((prev) => prev && {
+      ...prev,
+      findings: prev.findings.map((f) => (ids.has(f.id) ? { ...f, reviewed: next } : f)),
+    });
+    try {
+      await Promise.all(group.items.map((f) =>
+        postJson(`/api/findings/${f.id}/review?reviewed=${next}`, {})));
+    } catch {
+      reload();
+    }
+  }
 
   async function toggleReview(finding) {
     const next = !finding.reviewed;
@@ -152,58 +171,90 @@ export default function MonitorPage() {
                 </tr>
               </thead>
               <tbody>
-                {stored.findings.map((f) => (
-                  <tr key={f.id}
-                      className={`border-b border-white/5 align-top ${f.reviewed ? "opacity-45" : ""}`}>
-                    <td className="py-2 pr-2">
-                      <button
-                        onClick={() => toggleReview(f)}
-                        title={f.reviewed ? "Снять отметку" : "Отметить разобранным"}
-                        className="text-muted transition-colors hover:text-emerald-300"
-                      >
-                        {f.reviewed
-                          ? <CheckCircle2 className="size-4 text-emerald-400" />
-                          : <Circle className="size-4" />}
-                      </button>
-                    </td>
-                    <td className="py-2 pr-3 whitespace-nowrap font-medium text-ink">
-                      {f.operator}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <div className="font-medium text-ink">
-                        {f.departure_city} → {f.country}
-                      </div>
-                      {/* Длительность обязательна: она измерение матрицы, и без неё
-                          семь ночей и десять выглядят одной строкой, повторённой дважды.
-                          Первым делом это и приняли за дубликаты в отчёте. */}
-                      <div className="text-[11px] text-muted">
-                        {formatDate(f.date_from)}–{formatDate(f.date_to)} ·{" "}
-                        {f.params?.nights_min === f.params?.nights_max
-                          ? `${f.params?.nights_min} ноч.`
-                          : `${f.params?.nights_min}–${f.params?.nights_max} ноч.`} ·{" "}
-                        {f.search_mode === "hotels" ? "отели" : "туры"} ·{" "}
-                        {formatShortDateTime(f.run_at)}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-muted">
-                      {f.params?.adults} взр.
-                      {f.params?.children_ages?.length
-                        ? ` + ${f.params.children_ages.length} реб. (${f.params.children_ages.join(", ")})`
-                        : ""}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${KIND_TONE[f.kind] || KIND_TONE.reverse}`}>
-                        {f.kind_title}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3 text-ink">
-                      {f.hotel_name}{f.stars ? ` ${f.stars}*` : ""}
-                    </td>
-                    <td className="py-2 text-xs text-muted">
-                      {f.diagnosis_title ? <b className="text-ink">{f.diagnosis_title}. </b> : null}
-                      {f.note}
-                    </td>
-                  </tr>
+                {groupFindings(stored.findings).map((g) => (
+                  <Fragment key={g.key}>
+                    <tr className={`border-b border-white/5 align-top ${g.reviewed ? "opacity-45" : ""}`}>
+                      <td className="py-2 pr-2">
+                        <button
+                          onClick={() => toggleGroup(g)}
+                          title={g.reviewed ? "Снять отметку" : "Отметить разобранным"}
+                          className="text-muted transition-colors hover:text-emerald-300"
+                        >
+                          {g.reviewed
+                            ? <CheckCircle2 className="size-4 text-emerald-400" />
+                            : <Circle className="size-4" />}
+                        </button>
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap font-medium text-ink">
+                        {g.head.operator}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="font-medium text-ink">
+                          {g.head.departure_city} → {g.head.country}
+                        </div>
+                        {/* Совпадающее описываем один раз, различия — отдельной строкой:
+                            иначе четыре почти одинаковых ряда приходится сличать глазами,
+                            и они читаются как дубликаты. */}
+                        {g.count === 1 ? (
+                          <div className="text-[11px] text-muted">
+                            {formatDate(g.head.date_from)}–{formatDate(g.head.date_to)} ·{" "}
+                            {nightsLabel(g.head)} ·{" "}
+                            {g.head.search_mode === "hotels" ? "отели" : "туры"} ·{" "}
+                            {formatShortDateTime(g.head.run_at)}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setOpen((prev) => {
+                              const next = new Set(prev);
+                              next.has(g.key) ? next.delete(g.key) : next.add(g.key);
+                              return next;
+                            })}
+                            className="mt-0.5 flex items-center gap-1 text-[11px] text-brand-soft hover:underline"
+                          >
+                            {open.has(g.key)
+                              ? <ChevronDown className="size-3" />
+                              : <ChevronRight className="size-3" />}
+                            {g.count} {plural(g.count, "случай", "случая", "случаев")} ·
+                            различаются: {g.differences}
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-muted">
+                        {paxLabel(g.head)}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${KIND_TONE[g.head.kind] || KIND_TONE.reverse}`}>
+                          {g.head.kind_title}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-ink">
+                        {g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}
+                      </td>
+                      <td className="py-2 text-xs text-muted">
+                        {g.head.diagnosis_title
+                          ? <b className="text-ink">{g.head.diagnosis_title}. </b> : null}
+                        {g.head.note}
+                      </td>
+                    </tr>
+
+                    {open.has(g.key) && g.items.map((f) => (
+                      <tr key={f.id} className="border-b border-white/5 bg-white/[0.02] text-xs">
+                        <td />
+                        <td />
+                        <td className="py-1.5 pr-3 text-muted">
+                          {formatDate(f.date_from)}–{formatDate(f.date_to)} ·{" "}
+                          {nightsLabel(f)} ·{" "}
+                          {f.search_mode === "hotels" ? "отели" : "туры"}
+                        </td>
+                        <td className="py-1.5 pr-3 text-muted">{paxLabel(f)}</td>
+                        <td />
+                        <td className="py-1.5 pr-3 text-muted">
+                          {formatShortDateTime(f.run_at)}
+                        </td>
+                        <td className="py-1.5 text-muted">{f.note}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -222,6 +273,18 @@ export default function MonitorPage() {
     </m.div>
   );
 }
+
+const nightsLabel = (f) =>
+  f.params?.nights_min === f.params?.nights_max
+    ? `${f.params?.nights_min} ноч.`
+    : `${f.params?.nights_min}–${f.params?.nights_max} ноч.`;
+
+const paxLabel = (f) =>
+  `${f.params?.adults} взр.` +
+  (f.params?.children_ages?.length
+    ? ` + ${f.params.children_ages.length} реб. (${f.params.children_ages.join(", ")})`
+    : "");
+
 
 function Stat({ label, value, of, tone }) {
   const colour = tone === "brand" ? "text-brand-soft"
