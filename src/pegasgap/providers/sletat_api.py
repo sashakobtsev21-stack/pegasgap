@@ -111,6 +111,19 @@ class SletatApiError(RuntimeError):
     """Шлюз ответил ошибкой или неожиданной структурой."""
 
 
+def _parse_checkin(value: Any) -> date | None:
+    """Дата заезда из строки выдачи («23.10.2026» или с временем)."""
+    text = str(value or "").strip().split(" ")[0]
+    try:
+        day, month, year = (int(x) for x in text.split("."))
+    except ValueError:
+        return None
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def parse_price(value: Any) -> Decimal | None:
     """Цена из строки вида «12015 RUB» (шлюз отдаёт её с валютой, а не числом)."""
     if value is None:
@@ -184,6 +197,9 @@ def build_hotel_offers(rows: list[list], operator: str) -> list[HotelOffer]:
             rating=rating or None,
             destination=str(row[IDX_RESORT] or "").strip() or None,
             raw_label=str(row[IDX_HOTEL_ID] or ""),
+            checkin=_parse_checkin(row[IDX_DATE_FROM] if len(row) > IDX_DATE_FROM else None),
+            meal=str(row[IDX_MEAL] or "").strip() or None,
+            room=str(row[IDX_ROOM] or "").strip() or None,
         )
         seen = best.get(name)
         if seen is None or offer.price < seen.price:

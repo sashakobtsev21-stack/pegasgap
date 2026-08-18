@@ -102,7 +102,8 @@ def _kids(ages: list[int]) -> str:
     return ".".join(str(a) for a in ages) if ages else "zero"
 
 
-def search_url(params: SearchParams, hotel_id: int | None = None) -> str | None:
+def search_url(params: SearchParams, hotel_id: int | None = None,
+               checkin: date | None = None) -> str | None:
     """Ссылка на тот же поиск. None — города или страны нет в словаре.
 
     Молчаливая подстановка чего-то похожего здесь недопустима: ссылка на соседний город
@@ -112,6 +113,11 @@ def search_url(params: SearchParams, hotel_id: int | None = None) -> str | None:
     ссылке открывается выдача на сотни строк, в которой находку ещё надо разыскать.
     Имена параметров сняты с площадки перебором: `f_to_id` и `visibleOperators`, вопреки
     ожиданию, форму не меняют, работает именно `operators`.
+
+    `checkin` сужает окно до одного дня. Это обязательно для находок по цене: в окне у
+    отеля десяток заездов с разной ценой, мы записываем минимальный, а страница на всё
+    окно показывает свой — и число из отчёта не сходится с тем, что видит человек. Живой
+    случай: Myra, наш минимум на 23.10 (34 536), а по ссылке открывалось 17.10 (39 154).
     """
     city = CITY_NAMES.get((params.departure_city or "").strip())
     country = COUNTRY_NAMES.get((params.destination_country or "").strip())
@@ -122,9 +128,12 @@ def search_url(params: SearchParams, hotel_id: int | None = None) -> str | None:
             f"-for-{_MONTHS[params.date_from.month - 1]}"
             f"-nights-{params.nights_min}..{params.nights_max}"
             f"-adults-{params.adults}-kids-{_kids(list(params.children_ages))}")
+    # Заезд известен — сужаем окно до него, чтобы открылось ровно наше предложение.
+    start = checkin or params.date_from
+    finish = checkin or params.date_to
     fields = {
-        "datefrom": params.date_from.strftime("%d/%m/%Y"),
-        "dateto": params.date_to.strftime("%d/%m/%Y"),
+        "datefrom": start.strftime("%d/%m/%Y"),
+        "dateto": finish.strftime("%d/%m/%Y"),
         "currency": params.currency,
         # Режим «отели» — это поиск без перелёта.
         "ticketsincluded": "true" if params.search_mode == "tours" else "false",
@@ -138,7 +147,8 @@ def search_url(params: SearchParams, hotel_id: int | None = None) -> str | None:
     return f"{BASE}/{path}?{urlencode(fields)}"
 
 
-def search_url_from_row(params: dict, hotel_id: int | None = None) -> str | None:
+def search_url_from_row(params: dict, hotel_id: int | None = None,
+                        checkin: str | None = None) -> str | None:
     """То же, но из сохранённого словаря параметров прогона (`params_json`)."""
     try:
         return search_url(SearchParams(
@@ -152,6 +162,7 @@ def search_url_from_row(params: dict, hotel_id: int | None = None) -> str | None
             search_mode=params.get("search_mode") or "tours",
             currency=params.get("currency") or "RUB",
             operators=list(params.get("operators") or []),
-        ), hotel_id=hotel_id)
+        ), hotel_id=hotel_id,
+           checkin=date.fromisoformat(checkin) if checkin else None)
     except (KeyError, ValueError):
         return None

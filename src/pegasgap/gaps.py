@@ -279,6 +279,9 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             # ссылке на поиск, чтобы прижать её к конкретному отелю; у отельных пропусков
             # его проставляет диагностика, а здесь отель у нас есть — берём как есть.
             catalog_id=_as_int(m.checked.raw_label),
+            checked_checkin=m.checked.checkin,
+            checked_meal=m.checked.meal,
+            checked_room=m.checked.room,
             note=(f"разница {diff:+.1f}% при обычной для прогона {offset:+.1f}% "
                   f"(±{band:.1f}) — отклонение {deviation:+.1f}%"),
         ))

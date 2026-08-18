@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS gaps (
     diagnosis       TEXT    NOT NULL DEFAULT 'unknown',
     catalog_id      INTEGER,
     catalog_name    TEXT,
+    checked_checkin TEXT,
+    checked_meal    TEXT,
+    checked_room    TEXT,
     -- Триаж: находку кто-то посмотрел и закрыл вопрос. Отдельно от самой находки,
     -- потому что это состояние РАЗБОРА, а не результата проверки: перепроверка
     -- направления не должна сбрасывать то, что человек уже отсмотрел.
@@ -102,6 +105,9 @@ _MIGRATIONS = {
         "catalog_name": "TEXT",
         "reviewed": "INTEGER NOT NULL DEFAULT 0",
         "reviewed_at": "TEXT",
+        "checked_checkin": "TEXT",
+        "checked_meal": "TEXT",
+        "checked_room": "TEXT",
     },
     # Оператор стал измерением кейса. Прежние кейсы все были по Pegas — значение по
     # умолчанию проставляет им его же, поэтому история проверок переживает обновление.
@@ -176,14 +182,17 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
             """INSERT INTO gaps (
                    run_id, gap_key, kind, hotel_name, stars, resort,
                    reference_price, checked_price, currency, matched_name, note,
-                   diagnosis, catalog_id, catalog_name)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   diagnosis, catalog_id, catalog_name,
+                   checked_checkin, checked_meal, checked_room)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (run_id, g.key(), g.kind.value, g.hotel_name, g.stars, g.resort,
                  str(g.reference_price) if g.reference_price is not None else None,
                  str(g.checked_price) if g.checked_price is not None else None,
                  g.currency, g.matched_name, g.note,
-                 g.diagnosis.value, g.catalog_id, g.catalog_name)
+                 g.diagnosis.value, g.catalog_id, g.catalog_name,
+                 g.checked_checkin.isoformat() if g.checked_checkin else None,
+                 g.checked_meal, g.checked_room)
                 for g in scan.gaps
             ],
         )

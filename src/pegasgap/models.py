@@ -157,6 +157,13 @@ class HotelOffer(BaseModel):
     destination: str | None = None
     operators_count: int | None = None
     raw_label: str = ""
+    # Чем именно является это предложение. Цена сама по себе двусмысленна: в окне вылета
+    # у отеля десяток заездов с разной ценой, и «минимум по окну» с двух площадок легко
+    # приходится на РАЗНЫЕ даты. Живой случай: Myra — наш минимум на заезд 23.10, у
+    # эталона на 17.10, и «расхождение −11.8%» на деле было разницей между датами.
+    checkin: date | None = None
+    meal: str | None = None
+    room: str | None = None
 
     @property
     def label(self) -> str:
@@ -371,6 +378,14 @@ class HotelGap(BaseModel):
     diagnosis: HotelDiagnosis = HotelDiagnosis.UNKNOWN
     catalog_id: int | None = None         # внутренний ID отеля в справочнике Слетать
     catalog_name: str | None = None       # как отель называется в справочнике
+    # На какой заезд, питание и номер пришлась НАША цена. Без этого расхождение цены не
+    # воспроизводится: в окне вылета у отеля десяток заездов с разной ценой, и по ссылке
+    # на всё окно площадка покажет другое предложение — число из отчёта не сойдётся с тем,
+    # что видит человек. Живой случай: Myra, наш минимум на заезд 23.10 (34 536), а
+    # страница открывала 17.10 (39 154).
+    checked_checkin: date | None = None
+    checked_meal: str | None = None
+    checked_room: str | None = None
 
     @property
     def diff_abs(self) -> Decimal | None:

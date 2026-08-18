@@ -513,7 +513,11 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     # Ссылка на тот же поиск: без неё находка проверяется только
                     # повторением поиска руками по десятку полей формы.
                     "search_url": search_url_from_row(json.loads(r["params_json"]),
-                                                     r["catalog_id"]),
+                                                     r["catalog_id"],
+                                                     r["checked_checkin"]),
+                    "checked_checkin": r["checked_checkin"],
+                    "checked_meal": r["checked_meal"],
+                    "checked_room": r["checked_room"],
                     "kind": r["kind"],
                     "kind_title": GapKind(r["kind"]).title,
                     "hotel_name": r["hotel_name"], "stars": r["stars"],

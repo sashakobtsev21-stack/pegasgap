@@ -68,3 +68,17 @@ def test_unknown_operator_leaves_the_filter_out_rather_than_guessing():
 
 def test_link_without_hotel_still_works():
     assert "hotels=" not in search_url(params())
+
+
+def test_price_finding_links_to_the_exact_check_in():
+    """Живой случай: по Myra наш минимум пришёлся на заезд 23.10 (34 536), а ссылка на всё
+    окно открывала 17.10 (39 154) — число из отчёта не сходилось с тем, что видит человек.
+    Ссылка должна вести на то самое предложение, чью цену мы записали."""
+    url = search_url(params(), hotel_id=28205, checkin=date(2026, 10, 23))
+    assert "datefrom=23%2F10%2F2026" in url
+    assert "dateto=23%2F10%2F2026" in url
+
+
+def test_without_a_known_check_in_the_window_stays_as_searched():
+    url = search_url(params())
+    assert "datefrom=05%2F10%2F2026" in url and "dateto=12%2F10%2F2026" in url

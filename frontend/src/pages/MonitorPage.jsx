@@ -325,6 +325,16 @@ function Prices({ f }) {
           {diff.toFixed(1)}%)
         </div>
       )}
+      {/* На какой заезд пришлась НАША цена. В окне у отеля десяток заездов с разной
+          ценой, и минимум с двух площадок легко приходится на разные даты — без этой
+          строки «расхождение» читается как разница площадок, хотя это разница дат. */}
+      {f.checked_checkin && (
+        <div className="mt-0.5 text-[11px] text-muted">
+          наш минимум: заезд {formatDate(f.checked_checkin)}
+          {f.checked_meal ? ` · ${f.checked_meal}` : ""}
+          {f.checked_room ? ` · ${f.checked_room}` : ""}
+        </div>
+      )}
     </div>
   );
 }
