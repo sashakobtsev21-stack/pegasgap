@@ -342,7 +342,7 @@ def _systematic_gap_verdict(match: MatchResult, offset: float) -> str:
     другое число туристов, другая длительность.
     """
     pairs = [p for p in match.pairs if p.reference.price]
-    tail = "Находки по цене не показаны, к остальным относиться с подозрением"
+    tail = "Находки по цене не показаны; на отельные пропуски это не влияет"
     if len(pairs) >= MIN_PAIRS_FOR_SPREAD:
         deltas = [float(p.checked.price - p.reference.price) for p in pairs]
         prices = [float(p.reference.price) for p in pairs]
@@ -467,9 +467,16 @@ def detect(
     ]
     result.price_offset_pct = round(offset, 2) if offset is not None else None
     if offset is not None and abs(offset) > MAX_PLAUSIBLE_OFFSET_PCT:
-        # Проблема, а не заметка: при такой разнице нельзя утверждать, что стороны считают
-        # одно и то же, — а значит и к остальным находкам прогона доверия нет.
-        result.problems.append(_systematic_gap_verdict(match, offset))
+        # ЗАМЕТКА, а не проблема. Раньше здесь стояла проблема, и прогон браковался
+        # целиком — вместе с отельными пропусками, которые к ценам отношения не имеют:
+        # «этого отеля у нас нет» устанавливается по наличию, а не по цене. Живой счёт:
+        # 74 прогона выброшено только из-за сдвига, и с ними ушли 1834 отельных находки.
+        #
+        # Сами находки по цене при этом не показываются — их обнуляет `_price_gaps`,
+        # потому что ранжировать отклонения от заведомо чужой базы бессмысленно.
+        # А если вместе со сдвигом развалился и матчинг, это ловит отдельная проверка,
+        # и вот она прогон действительно бракует.
+        result.notes.append(_systematic_gap_verdict(match, offset))
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
     result.checked_hotels = len(chk_hotels)

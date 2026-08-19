@@ -349,8 +349,11 @@ def test_implausible_offset_kills_price_findings():
                             for i in range(10)])
     scan = detect(PARAMS, ref, chk)
     assert scan.gaps_of(GapKind.PRICE) == []
-    assert not scan.trustworthy
-    assert any("разное её определение" in p for p in scan.problems)
+    # Прогон при этом ОСТАЁТСЯ достоверным: сдвиг цен обесценивает находки по цене, но
+    # ничего не говорит про наличие отелей — «этого отеля у нас нет» устанавливается по
+    # присутствию в выдаче, а не по цене.
+    assert scan.trustworthy
+    assert any("разное её определение" in n for n in scan.notes)
     assert scan.price_offset_pct is not None    # сам сдвиг показываем: это и есть симптом
 
 
@@ -409,10 +412,10 @@ def test_flat_rouble_difference_is_named_as_the_flight():
     chk = result("sletat", [hotel(f"H{i}", str(v - 75000), "sletat")
                             for i, v in enumerate(prices)])
     scan = detect(PARAMS, ref, chk)
-    verdict = " ".join(scan.problems)
+    verdict = " ".join(scan.notes)
     assert "перевозка" in verdict
     assert "75 000" in verdict
-    assert not scan.trustworthy
+    assert scan.trustworthy
 
 
 def test_proportional_divergence_keeps_the_old_wording():
@@ -423,7 +426,7 @@ def test_proportional_divergence_keeps_the_old_wording():
     chk = result("sletat", [hotel(f"H{i}", str(50000 * (i + 1)), "sletat")
                             for i in range(6)])
     scan = detect(PARAMS, ref, chk)
-    verdict = " ".join(scan.problems)
+    verdict = " ".join(scan.notes)
     assert "разное её определение" in verdict
     assert "перевозка" not in verdict
 
@@ -434,4 +437,18 @@ def test_flat_verdict_is_not_claimed_when_hotels_cost_the_same():
     ref = result("tourvisor", [hotel(f"H{i}", str(480000 + i), "tourvisor") for i in range(8)])
     chk = result("sletat", [hotel(f"H{i}", str(250000 + i), "sletat") for i in range(8)])
     scan = detect(PARAMS, ref, chk)
-    assert not any("перевозка" in p for p in scan.problems)
+    assert not any("перевозка" in n for n in scan.notes)
+
+
+def test_price_divergence_does_not_bury_hotel_gaps():
+    """Живой счёт: 74 прогона забракованы только из-за ценового сдвига, и вместе с ними
+    ушли 1834 отельных находки. «Этого отеля у нас нет» устанавливается по присутствию в
+    выдаче, а не по цене, и к разной базе цен отношения не имеет."""
+    ref = result("tourvisor", [hotel(f"H{i}", str(200000 + i * 9000), "tourvisor")
+                               for i in range(6)] + [hotel("Только у них", "150000", "tourvisor")])
+    chk = result("sletat", [hotel(f"H{i}", str(120000 + i * 9000), "sletat")
+                            for i in range(6)])
+    scan = detect(PARAMS, ref, chk)
+    assert scan.trustworthy
+    assert scan.gaps_of(GapKind.PRICE) == []
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.HOTEL)] == ["Только у них"]
