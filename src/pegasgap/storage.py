@@ -367,7 +367,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
     решения, которое по нему принимают. `min_times` отсекает разовые.
     """
     extra, extra_values = _where(filters)
-    return conn.execute(
+    rows = conn.execute(
         f"""SELECT g.id, g.run_id, g.kind, g.hotel_name, g.stars, g.resort,
                    g.reference_price, g.checked_price, g.currency, g.matched_name,
                    g.note, g.diagnosis, g.catalog_id, g.catalog_name,
@@ -391,6 +391,10 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
              LIMIT ?""",
         (since.isoformat(timespec="seconds"), max(1, min_times), *extra_values, limit),
     ).fetchall()
+    # Выбираем СВЕЖИЕ (иначе при лимите в пятьсот строк новые находки оказались бы за
+    # пределом окна и не показывались вовсе), а отдаём в хронологическом порядке — чтобы
+    # во время обхода они дописывались снизу, а список не прыгал под курсором.
+    return sorted(rows, key=lambda r: r["run_at"])
 
 
 def finding_facets(conn: sqlite3.Connection, since: datetime) -> dict:

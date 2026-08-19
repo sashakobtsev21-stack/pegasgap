@@ -148,3 +148,14 @@ def test_unreviewing_a_problem_brings_it_back(conn):
     storage.set_problem_reviewed(conn, key, reviewed=False)
     assert storage.findings_summary(conn, since)["unique_reviewed"] == 0
     assert len(storage.findings(conn, since, only_open=True)) == 1
+
+
+def test_findings_come_back_oldest_first(conn):
+    """Во время обхода новые находки должны дописываться снизу, а не прыгать наверх.
+    При этом ВЫБИРАЮТСЯ свежие: сортировка по возрастанию прямо в запросе оставила бы
+    новые за пределом лимита, и на экране их не было бы вовсе."""
+    old = datetime.now() - timedelta(hours=3)
+    storage.save_scan(conn, scan([gap("Первый")], when=old))
+    storage.save_scan(conn, scan([gap("Второй")]))
+    names = [r["hotel_name"] for r in storage.findings(conn, datetime.now() - timedelta(days=1))]
+    assert names == ["Первый", "Второй"]

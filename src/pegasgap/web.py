@@ -511,6 +511,11 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
             # Списки для фильтров — только то, что реально есть в отчёте за период.
             "facets": {
                 **facets,
+                # «не проверялось» из списка причин убрано: это не причина, а её
+                # отсутствие — диагностика по справочнику не запускалась. Фильтровать
+                # по ней значит отбирать находки, про которые ничего не известно.
+                "diagnoses": [d for d in facets["diagnoses"]
+                              if d != HotelDiagnosis.UNKNOWN.value],
                 "kind_titles": {k.value: k.title for k in GapKind},
                 "diagnosis_titles": {d.value: d.title for d in HotelDiagnosis},
             },
