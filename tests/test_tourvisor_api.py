@@ -82,3 +82,12 @@ def test_foreign_block_means_the_filter_did_not_apply():
 
 def test_empty_result_is_not_evidence_against_the_filter():
     assert tourvisor_api._blocks_are_ours([], 12)
+
+
+def test_empty_result_is_complete_not_truncated():
+    """«У оператора тут туров нет» — полный ответ, а не недобор. Цикл постраничного сбора
+    выходил по break и падал в ветку «упёрлись в предел», и каждое пустое направление
+    помечалось обрезанным: живой пример — Абхазия у Pegas."""
+    blocks, finished, complete = _collect(([],))
+    assert finished and complete
+    assert blocks == [{"operator": 12, "hotel": []}]

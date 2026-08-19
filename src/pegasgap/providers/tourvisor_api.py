@@ -511,9 +511,13 @@ class TourvisorApiProvider:
             return blocks, False, False
 
         seen = _hotel_codes(blocks)
+        # Отелей нет вовсе — листать нечего, и это ПОЛНЫЙ ответ, а не недобор. Раньше
+        # цикл выходил по break и падал в ветку «упёрлись в предел», из-за чего каждое
+        # «у оператора тут туров нет» помечалось обрезанной выдачей.
+        if not seen:
+            return blocks, True, True
+
         for _ in range(MAX_PAGES - 1):
-            if not seen:
-                break
             body = await self._get(client, SEARCH_URL, referrer=referrer,
                                    nextpage=1, requestid=request_id)
             next_id = _to_int((body.get("result") or {}).get("requestid"))
