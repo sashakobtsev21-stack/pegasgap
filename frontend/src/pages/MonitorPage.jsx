@@ -108,15 +108,22 @@ export default function MonitorPage() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Проверено кейсов" value={queue.checked ?? 0} of={queue.total} />
           <Stat label="Осталось в очереди" value={queue.pending ?? 0} />
-          <Stat label="Найдено за 30 дней" value={summary.total ?? 0} tone="brand" />
+          <Stat label="Проблем за 30 дней" value={summary.unique ?? 0} tone="brand" />
           {/* Раньше рядом стояло «не разобрано», повторявшее предыдущую цифру один в
               один, пока никто ничего не отметил. Прогресс разбора полезнее: он растёт. */}
-          <Stat label="Разобрано за 30 дней" value={summary.reviewed ?? 0} of={summary.total}
+          <Stat label="Разобрано" value={summary.unique_reviewed ?? 0} of={summary.unique}
                 tone="amber" />
         </div>
 
+        {/* Разрыв между числом проверок и числом находок сбивает с толку, если его не
+            объяснить: одна проверка сравнивает сотню отелей, и каждый отсутствующий даёт
+            строку, а потом повторяется в каждом окне дат. Поэтому показываем «проблемы»
+            (отель + оператор + направление), а строки идут пояснением. */}
         <p className="mt-2 text-[11px] text-muted">
-          Кейсы считаются за всё время жизни очереди, находки — за последние 30 дней.
+          Проблема — это отель у оператора на направлении; в отчёте она одна строка, даже
+          если встретилась в нескольких датах. Всего таких повторов{" "}
+          <b className="text-ink">{summary.total ?? 0}</b>. Кейсы считаются за всё время
+          жизни очереди, находки — за последние 30 дней.
         </p>
 
         {(liveState?.errors ?? worker?.errors ?? 0) > 0 && (
@@ -158,7 +165,16 @@ export default function MonitorPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1100px] table-fixed text-sm">
+              <colgroup>
+                <col className="w-10" />
+                <col className="w-[9rem]" />
+                <col className="w-[15rem]" />
+                <col className="w-[7rem]" />
+                <col className="w-[10rem]" />
+                <col />
+                <col className="w-[13rem]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="w-10 py-2 pr-2 font-semibold">✓</th>

@@ -315,11 +315,29 @@ def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
     """Счётчики для шапки: сколько найдено и сколько из этого уже разобрано."""
     row = conn.execute(
         f"""SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed
+                   SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed,
+                   -- Уникальные проблемы: тот же отель у того же оператора на том же
+                   -- направлении. Строк всегда во много раз больше — одна проверка
+                   -- сравнивает сотню отелей, и каждый отсутствующий даёт строку, а
+                   -- потом повторяется в каждом окне дат и на каждой длительности.
+                   -- Без этого числа «33 327 находок при 1190 проверках» не читается.
+                   COUNT(DISTINCT r.operator || '|' || r.departure_city || '|'
+                                  || r.destination_country || '|' || g.hotel_name
+                                  || '|' || g.kind) AS unique_problems,
+                   COUNT(DISTINCT CASE WHEN g.reviewed = 1 THEN
+                                  r.operator || '|' || r.departure_city || '|'
+                                  || r.destination_country || '|' || g.hotel_name
+                                  || '|' || g.kind END) AS unique_reviewed
               FROM gaps g JOIN runs r ON r.id = g.run_id
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}""",
         (since.isoformat(timespec="seconds"),),
     ).fetchone()
     total = row["total"] or 0
     reviewed = row["reviewed"] or 0
-    return {"total": total, "reviewed": reviewed, "open": total - reviewed}
+    unique = row["unique_problems"] or 0
+    unique_reviewed = row["unique_reviewed"] or 0
+    return {"total": total, "reviewed": reviewed, "open": total - reviewed,
+            # Счётчики на экране должны считать ОДНО И ТО ЖЕ. Рядом стоящие «проблем 9205»
+            # и «разобрано 0 из 33493» читались как разные величины, потому что ими и были.
+            "unique": unique, "unique_reviewed": unique_reviewed,
+            "unique_open": unique - unique_reviewed}
