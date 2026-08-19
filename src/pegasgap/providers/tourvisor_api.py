@@ -289,7 +289,7 @@ class TourvisorApiProvider:
             # Сетевой отказ через прокси — чаще всего мёртвый прокси, а не мёртвая
             # площадка. Отправляем адрес остывать, чтобы следующий кейс взял другой.
             pool().penalise(proxy)
-            return self._fail(params, start, f"Сеть/эндпоинт: {type(exc).__name__}: {exc}")
+            return self._fail(params, start, f"Турвизор недоступен: {type(exc).__name__}: {exc}")
         except TourvisorApiError as exc:
             if is_blocked(str(exc)):
                 pool().penalise(proxy)

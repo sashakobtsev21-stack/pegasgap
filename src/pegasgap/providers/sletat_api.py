@@ -287,7 +287,7 @@ class SletatApiProvider:
             return self._fail(params, start, str(exc))
         except httpx.HTTPError as exc:
             pool().penalise(proxy)
-            return self._fail(params, start, f"Сеть/шлюз: {type(exc).__name__}: {exc}")
+            return self._fail(params, start, f"шлюз Слетать недоступен: {type(exc).__name__}: {exc}")
         except SletatApiError as exc:
             if is_blocked(str(exc)):
                 pool().penalise(proxy)
@@ -354,15 +354,16 @@ class SletatApiProvider:
         response = await client.get(f"{BASE_URL}/{method}", params=payload)
         log.debug("шлюз %s → %s", _redact(str(response.url)), response.status_code)
         if response.status_code != 200:
-            raise SletatApiError(f"{method}: HTTP {response.status_code}")
+            raise SletatApiError(f"шлюз Слетать, {method}: HTTP {response.status_code}")
         try:
             body = response.json()
         except ValueError as exc:
-            raise SletatApiError(f"{method}: ответ не JSON") from exc
+            raise SletatApiError(f"шлюз Слетать, {method}: ответ не JSON") from exc
         result = body.get(f"{method}Result") or {}
         # Ошибка лежит именно в IsError/ErrorMessage — сверено с живым ответом.
         if result.get("IsError"):
-            raise SletatApiError(f"{method}: {result.get('ErrorMessage') or 'ошибка шлюза'}")
+            raise SletatApiError(f"шлюз Слетать, {method}: "
+                                 f"{result.get('ErrorMessage') or 'ошибка шлюза'}")
         data = result.get("Data")
         if data is None:
             raise SletatApiError(f"{method}: в ответе нет Data")

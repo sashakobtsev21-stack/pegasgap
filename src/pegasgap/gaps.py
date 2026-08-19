@@ -115,6 +115,19 @@ def operator_status(result: ProviderResult | None, operator: str = PEGAS) -> Ope
     return OperatorStatus.ABSENT
 
 
+# Роль в сравнении → название площадки. В сообщениях нужны именно названия: «эталон» и
+# «проверяемая» понятны тому, кто держит в голове устройство инструмента, а читающему лог
+# нужно знать, НА КАКОМ САЙТЕ проблема, чтобы идти разбираться в правильное место.
+_PLATFORM = {"tourvisor": "Турвизор", "sletat": "Слетать"}
+
+
+def _who(result: ProviderResult | None, fallback: str) -> str:
+    """Название площадки для сообщения; роль — только если провайдер неизвестен."""
+    if result is None:
+        return fallback
+    return _PLATFORM.get(result.provider, result.provider or fallback)
+
+
 def _collect_problems(
     reference: ProviderResult | None,
     checked: ProviderResult | None,
@@ -130,27 +143,30 @@ def _collect_problems(
     notes: list[str] = []
 
     # Пояснения площадок к состоявшемуся ответу — контекст, а не поломка.
-    for role, res in (("эталон", reference), ("проверяемая", checked)):
+    for res, fallback in ((reference, "эталон"), (checked, "проверяемая")):
         if res is not None and res.note:
-            notes.append(f"{role}: {res.note}")
+            notes.append(f"{_who(res, fallback)}: {res.note}")
 
     if reference is None:
-        problems.append("эталон: результата нет")
+        problems.append("Турвизор (эталон): результата нет")
     elif not reference.success and not is_not_applicable_error(reference.error):
-        problems.append(f"эталон: поиск не удался — {reference.error}")
+        problems.append(f"{_who(reference, 'эталон')} (эталон): поиск не удался — "
+                        f"{reference.error}")
 
     # Проверяемая сторона: ЛЮБОЙ несостоявшийся поиск — проблема, включая «площадка не
     # обслуживает такой запрос». На стороне эталона такой отказ безобиден (просто нечего
     # сравнивать), а здесь он означает, что проверку выполнить не удалось. Молчать о нём
     # нельзя: пустая выдача из-за нашего же сбоя выглядит точь-в-точь как пропуск оператора.
     if checked is None:
-        problems.append("проверяемая: результата нет")
+        problems.append("Слетать: результата нет")
     elif not checked.success:
-        problems.append(f"проверяемая: проверка не выполнена — {checked.error}")
+        problems.append(f"{_who(checked, 'проверяемая')}: проверка не выполнена — "
+                        f"{checked.error}")
 
-    for role, res in (("эталон", reference), ("проверяемая", checked)):
+    for res, fallback in ((reference, "эталон"), (checked, "проверяемая")):
         if res is None:
             continue
+        role = _who(res, fallback)
         # Фильтр по оператору не подтвердился: карточки отелей не несут имени ТО, значит
         # цены в них — минимум по всем операторам, и любой вывод о пропусках будет ложным.
         if res.operator_filter_verified is False:
@@ -159,8 +175,8 @@ def _collect_problems(
     # Обрезанная выдача проверяемой стороны — прямой источник выдуманных пропусков: отель
     # мог просто не догрузиться, а выглядит это как «у оператора его нет».
     if checked is not None and checked.truncated:
-        problems.append("проверяемая: выдача получена не целиком — часть «пропусков» может "
-                        "оказаться просто недогруженными отелями")
+        problems.append(f"{_who(checked, 'проверяемая')}: выдача получена не целиком — "
+                        f"часть «пропусков» может оказаться просто недогруженными отелями")
 
     # А вот обрезка ЭТАЛОНА ложных находок не даёт: отель, который мы увидели, мы увидели,
     # и пропуск по нему настоящий независимо от того, сколько ещё осталось за кадром. Это
@@ -172,8 +188,8 @@ def _collect_problems(
     # Исключение — обратные пропуски: «есть у нас, нет у эталона» на недочитанном эталоне
     # выдуманы поголовно. Включён их показ — обрезка снова становится проблемой.
     if reference is not None and reference.truncated:
-        message = ("эталон: выдача получена не целиком — часть пропусков могла не попасть "
-                   "в отчёт")
+        message = (f"{_who(reference, 'эталон')} (эталон): выдача получена не целиком — "
+                   f"часть пропусков могла не попасть в отчёт")
         if REPORT_REVERSE:
             problems.append(f"{message}, а обратные пропуски на ней недостоверны поголовно")
         else:
