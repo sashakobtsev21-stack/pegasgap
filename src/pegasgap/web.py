@@ -493,14 +493,29 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
         return {"seeded": seeded, "retired": retired, "stats": queue_stats}
 
     @app.get("/api/findings")
-    async def findings(days: int = 7, only_open: bool = False, limit: int = 500) -> dict:
+    async def findings(days: int = 7, only_open: bool = False, limit: int = 500,
+                       min_times: int = 1) -> dict:
         since = datetime.now() - timedelta(days=max(1, days))
         with storage.session(db_path) as conn:
-            rows = storage.findings(conn, since, only_open=only_open, limit=limit)
+            rows = storage.findings(conn, since, only_open=only_open, limit=limit,
+                                    min_times=min_times)
             summary = storage.findings_summary(conn, since)
             queue_stats = case_queue.stats(conn)
+            failed = storage.failed_runs(conn, since)
         return {
             "summary": {**summary, "queue": queue_stats},
+            # Непроверенное — рядом с отчётом, а не на отдельной вкладке: без него не
+            # видно, покрыто ли направление вообще.
+            "failed": [
+                {
+                    "run_id": r["id"], "run_at": r["run_at"], "operator": r["operator"],
+                    "departure_city": r["departure_city"],
+                    "country": r["destination_country"],
+                    "search_mode": r["search_mode"],
+                    "problems": json.loads(r["problems"] or "[]"),
+                }
+                for r in failed
+            ],
             "findings": [
                 {
                     "id": r["id"], "run_id": r["run_id"], "run_at": r["run_at"],
@@ -546,6 +561,9 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     "note": r["note"],
                     "reviewed": bool(r["reviewed"]),
                     "reviewed_at": r["reviewed_at"],
+                    # Возраст находки: сколько прогонов держится и когда увидели впервые.
+                    "times_seen": r["times_seen"] or 1,
+                    "first_seen": r["first_seen"],
                 }
                 for r in rows
             ],

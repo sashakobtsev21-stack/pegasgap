@@ -7,7 +7,6 @@ import { useHashRoute, matchRun } from "./lib/router.js";
 
 // Не-входные экраны — лениво: отдельными чанками, чтобы стартовый бандл нёс только форму.
 const GapsPage = lazy(() => import("./pages/GapsPage.jsx"));
-const HistoryPage = lazy(() => import("./pages/HistoryPage.jsx"));
 const SweepPage = lazy(() => import("./pages/SweepPage.jsx"));
 const MonitorPage = lazy(() => import("./pages/MonitorPage.jsx"));
 const LogsPage = lazy(() => import("./pages/LogsPage.jsx"));
@@ -37,7 +36,9 @@ function AppInner() {
   else if (route.startsWith("/monitor")) page = <MonitorPage />;
   else if (route.startsWith("/logs")) page = <LogsPage />;
   else if (route.startsWith("/sweep")) page = <SweepPage />;
-  else if (route.startsWith("/history")) page = <HistoryPage />;
+  // Старая ссылка на «Историю» ведёт в «Мониторинг»: её содержимое переехало туда —
+  // возраст находки, фильтр устойчивости, перечень непроверенного.
+  else if (route.startsWith("/history")) page = <MonitorPage />;
   else page = <ScanPage />;
 
   return (

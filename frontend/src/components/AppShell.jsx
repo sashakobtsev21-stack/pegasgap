@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { m } from "framer-motion";
-import { History, Loader2, Radar, ScrollText, Search, Square } from "lucide-react";
+import { Loader2, Radar, ScrollText, Search, Square } from "lucide-react";
 import { fadeUp } from "../lib/animations.js";
 import { postJson } from "../lib/api.js";
 import { useEventStream } from "../lib/stream.js";
@@ -23,7 +23,6 @@ const NAV = [
     match: (p) => p.startsWith("/monitor") || p.startsWith("/sweep"),
   },
   { label: "Логи", href: "#/logs", icon: ScrollText, match: (p) => p.startsWith("/logs") },
-  { label: "История", href: "#/history", icon: History, match: (p) => p.startsWith("/history") },
 ];
 
 export default function AppShell({ route = "/", children }) {

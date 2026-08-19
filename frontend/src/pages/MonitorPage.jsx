@@ -36,13 +36,20 @@ export default function MonitorPage() {
   // счётчик показывал 1379 находок, а таблица молча обрывалась на пятистах — и это
   // читалось как «вот всё, что нашли». Порог поднимается кнопкой.
   const [limit, setLimit] = useState(500);
+  const [days, setDays] = useState(30);
+  // Порог устойчивости. Разовая находка чаще всего рябь выдачи; проблема, которая
+  // держится несколько прогонов подряд, — уже адрес для разбора. Раньше это жило
+  // отдельной вкладкой, то есть отдельно от решения, которое по нему принимают.
+  const [minTimes, setMinTimes] = useState(1);
+  const [showFailed, setShowFailed] = useState(false);
   const [open, setOpen] = useState(() => new Set());   // раскрытые группы
 
   const reload = useCallback(() => {
-    getJson(`/api/findings?days=30&only_open=${onlyOpen}&limit=${limit}`)
+    getJson(`/api/findings?days=${days}&only_open=${onlyOpen}&limit=${limit}`
+            + `&min_times=${minTimes}`)
       .then(setStored).catch(() => {});
     getJson("/api/worker").then(setWorker).catch(() => {});
-  }, [onlyOpen, limit]);
+  }, [onlyOpen, limit, days, minTimes]);
 
   useEffect(reload, [reload]);
   // Новая находка в потоке — подтягиваем накопленное, чтобы у строки появился id и с ней
@@ -108,7 +115,7 @@ export default function MonitorPage() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Проверено кейсов" value={queue.checked ?? 0} of={queue.total} />
           <Stat label="Осталось в очереди" value={queue.pending ?? 0} />
-          <Stat label="Проблем за 30 дней" value={summary.unique ?? 0} tone="brand" />
+          <Stat label={`Проблем за ${days} дн.`} value={summary.unique ?? 0} tone="brand" />
           {/* Раньше рядом стояло «не разобрано», повторявшее предыдущую цифру один в
               один, пока никто ничего не отметил. Прогресс разбора полезнее: он растёт. */}
           <Stat label="Разобрано" value={summary.unique_reviewed ?? 0} of={summary.unique}
@@ -123,8 +130,38 @@ export default function MonitorPage() {
           Проблема — это отель у оператора на направлении; в отчёте она одна строка, даже
           если встретилась в нескольких датах. Всего таких повторов{" "}
           <b className="text-ink">{summary.total ?? 0}</b>. Кейсы считаются за всё время
-          жизни очереди, находки — за последние 30 дней.
+          жизни очереди, находки — за выбранный период.
         </p>
+
+        {/* Непроверенное держим на виду: прогон, которому нельзя верить, — это дыра в
+            покрытии, и молчать о ней значит выдавать неполный отчёт за полный. */}
+        {summary.failed_runs > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowFailed((v) => !v)}
+              className="text-xs font-semibold text-amber-300 hover:underline"
+            >
+              Не удалось проверить: {summary.failed_runs}{" "}
+              {plural(summary.failed_runs, "прогон", "прогона", "прогонов")} —{" "}
+              {showFailed ? "свернуть" : "показать причины"}
+            </button>
+            {showFailed && (
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                {(stored?.failed || []).map((f) => (
+                  <div key={f.run_id} className="border-b border-white/5 py-1 text-[11px]">
+                    <span className="text-ink">
+                      {f.operator}: {f.departure_city} → {f.country}
+                    </span>{" "}
+                    <span className="text-muted">
+                      {f.search_mode === "hotels" ? "отели" : "туры"} ·{" "}
+                      {formatShortDateTime(f.run_at)} — {f.problems.join("; ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {(liveState?.errors ?? worker?.errors ?? 0) > 0 && (
           <p className="mt-3 text-xs text-amber-300">
@@ -143,15 +180,34 @@ export default function MonitorPage() {
               ? ` · показано ${stored.findings.length} из ${summary.total}`
               : ` · ${stored.findings.length}`) : ""}
           </h2>
-          <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={onlyOpen}
-              onChange={(e) => setOnlyOpen(e.target.checked)}
-              className="size-3.5 accent-brand"
-            />
-            только неразобранные
-          </label>
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted">
+            <label className="flex items-center gap-1.5">
+              период
+              <select value={days} onChange={(e) => setDays(Number(e.target.value))}
+                      className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-ink">
+                {[1, 7, 30, 90].map((d) => <option key={d} value={d}>{d} дн.</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              держится
+              <select value={minTimes} onChange={(e) => setMinTimes(Number(e.target.value))}
+                      className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-ink">
+                <option value={1}>любые</option>
+                <option value={2}>от 2 прогонов</option>
+                <option value={3}>от 3 прогонов</option>
+                <option value={5}>от 5 прогонов</option>
+              </select>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={onlyOpen}
+                onChange={(e) => setOnlyOpen(e.target.checked)}
+                className="size-3.5 accent-brand"
+              />
+              только неразобранные
+            </label>
+          </div>
         </div>
 
         {!stored ? (
@@ -242,6 +298,15 @@ export default function MonitorPage() {
                         <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${KIND_TONE[g.head.kind] || KIND_TONE.reverse}`}>
                           {g.head.kind_title}
                         </span>
+                        {/* Возраст отделяет устойчивую проблему от разовой ряби. */}
+                        {g.head.times_seen > 1 && (
+                          <div className="mt-1 text-[11px] text-muted">
+                            держится {g.head.times_seen}{" "}
+                            {plural(g.head.times_seen, "прогон", "прогона", "прогонов")}
+                            {g.head.first_seen
+                              ? `, с ${formatDate(g.head.first_seen.slice(0, 10))}` : ""}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 pr-3 text-ink">
                         <div>{g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}</div>

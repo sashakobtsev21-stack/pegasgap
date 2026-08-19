@@ -297,20 +297,48 @@ _REPORTED_KINDS = "g.kind <> 'reverse'"
 
 
 def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
-             limit: int = 500) -> list[sqlite3.Row]:
+             limit: int = 500, min_times: int = 1) -> list[sqlite3.Row]:
     """Находки за период вместе с параметрами прогона — то, что показывает отчёт.
 
     Недостоверные прогоны исключены: их находки нельзя ни разбирать, ни считать.
+
+    К каждой находке подтягивается её возраст из истории: когда увидели впервые и сколько
+    прогонов подряд она держится. Это главный признак, отделяющий устойчивую проблему от
+    разовой ряби выдачи, и раньше он жил на отдельной вкладке — то есть отдельно от
+    решения, которое по нему принимают. `min_times` отсекает разовые.
     """
     return conn.execute(
         f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
-                   r.search_mode, r.params_json, r.operator, r.reference_url
-              FROM gaps g JOIN runs r ON r.id = g.run_id
+                   r.search_mode, r.params_json, r.operator, r.reference_url,
+                   h.times_seen, h.first_seen
+              FROM gaps g
+              JOIN runs r ON r.id = g.run_id
+              LEFT JOIN gap_history h
+                     ON h.scenario_key = r.scenario_key AND h.gap_key = g.gap_key
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+                   AND COALESCE(h.times_seen, 1) >= ?
                    {"AND g.reviewed = 0" if only_open else ""}
              ORDER BY g.reviewed ASC, r.run_at DESC
              LIMIT ?""",
+        (since.isoformat(timespec="seconds"), max(1, min_times), limit),
+    ).fetchall()
+
+
+def failed_runs(conn: sqlite3.Connection, since: datetime,
+                limit: int = 200) -> list[sqlite3.Row]:
+    """Прогоны, которым нельзя верить, с причинами.
+
+    Это диагностика инструмента, а не находки, но прятать её нельзя: без неё непонятно,
+    покрыто ли направление вообще. Раньше жила на «Истории» вместе со всем подряд.
+    """
+    return conn.execute(
+        """SELECT id, run_at, operator, departure_city, destination_country,
+                  search_mode, problems
+             FROM runs
+            WHERE run_at >= ? AND trustworthy = 0
+            ORDER BY run_at DESC
+            LIMIT ?""",
         (since.isoformat(timespec="seconds"), limit),
     ).fetchall()
 
@@ -336,6 +364,9 @@ def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}""",
         (since.isoformat(timespec="seconds"),),
     ).fetchone()
+    failed = conn.execute(
+        "SELECT COUNT(*) FROM runs WHERE run_at >= ? AND trustworthy = 0",
+        (since.isoformat(timespec="seconds"),)).fetchone()[0]
     total = row["total"] or 0
     reviewed = row["reviewed"] or 0
     unique = row["unique_problems"] or 0
@@ -344,4 +375,4 @@ def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
             # Счётчики на экране должны считать ОДНО И ТО ЖЕ. Рядом стоящие «проблем 9205»
             # и «разобрано 0 из 33493» читались как разные величины, потому что ими и были.
             "unique": unique, "unique_reviewed": unique_reviewed,
-            "unique_open": unique - unique_reviewed}
+            "unique_open": unique - unique_reviewed, "failed_runs": failed}
