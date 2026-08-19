@@ -32,13 +32,16 @@ function isoInDays(days) {
  * Отчёт на эту страницу не выносим: смешивать «что запустить» и «что нашлось» — значит
  * получить экран, на котором не делается толком ни то, ни другое.
  */
+// Регулярный обход первым и по умолчанию: это основной режим работы инструмента, ради
+// него он и существует. Точечная проверка — разбор конкретной жалобы, дело нечастое.
+// Название то же, что в конфиге и README, чтобы термин не расползся в два.
 const MODES = [
+  { id: "full", label: "Регулярный обход", icon: ListChecks },
   { id: "single", label: "Одно направление", icon: Search },
-  { id: "full", label: "Полная по топу", icon: ListChecks },
 ];
 
 export default function ScanPage() {
-  const [mode, setMode] = useState("single");
+  const [mode, setMode] = useState("full");
   return (
     <m.div variants={staggerContainer} initial="hidden" animate="show"
            className="mx-auto max-w-3xl space-y-4">
@@ -247,7 +250,7 @@ function FullScan() {
         </span>
         <div className="min-w-0">
           <h1 className="text-xl font-extrabold tracking-tight text-white">
-            Полная проверка по топу
+            Регулярный обход
           </h1>
           <p className="text-xs text-muted">
             Обход очереди направлений с наибольшим объёмом у оператора. Идёт в фоне —
@@ -310,7 +313,7 @@ function FullScan() {
         >
           {busy ? <Loader2 className="size-4 animate-spin" />
                 : running ? <Pause className="size-4" /> : <Play className="size-4" />}
-          {running ? "Остановить проверку" : "Запустить полную проверку"}
+          {running ? "Остановить обход" : "Запустить обход"}
         </button>
       </div>
 
