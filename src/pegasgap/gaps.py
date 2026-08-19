@@ -283,6 +283,7 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             # Идентификатор отеля в нашем каталоге приходит в самой выдаче. Он нужен
             # ссылке на поиск, чтобы прижать её к конкретному отелю; у отельных пропусков
             # его проставляет диагностика, а здесь отель у нас есть — берём как есть.
+            reference_hotel_id=_as_int(m.reference.raw_label),
             catalog_id=_as_int(m.checked.raw_label),
             checked_checkin=m.checked.checkin,
             checked_meal=m.checked.meal,
@@ -417,6 +418,7 @@ def detect(
             resort=h.destination,
             reference_price=h.price,
             currency=h.currency,
+            reference_hotel_id=_as_int(h.raw_label),
             note="есть у оператора на эталоне, в нашей выдаче отеля нет",
         )
         for h in sorted(match.only_reference, key=lambda h: h.price)
@@ -469,4 +471,5 @@ def detect(
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
     result.checked_hotels = len(chk_hotels)
+    result.reference_url = reference.search_url if reference else None
     return result

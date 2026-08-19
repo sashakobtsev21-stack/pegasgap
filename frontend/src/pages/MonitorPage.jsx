@@ -247,12 +247,20 @@ export default function MonitorPage() {
                         <div>{g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}</div>
                         {/* Ссылка на тот же поиск: без неё находка проверяется только
                             повторением поиска руками по десятку полей формы. */}
-                        {g.head.search_url && (
-                          <a href={g.head.search_url} target="_blank" rel="noreferrer"
-                             className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-brand-soft hover:underline">
-                            <ExternalLink className="size-3" /> открыть поиск на Слетать
-                          </a>
-                        )}
+                        <div className="mt-0.5 flex flex-col gap-0.5">
+                          {g.head.search_url && (
+                            <a href={g.head.search_url} target="_blank" rel="noreferrer"
+                               className="inline-flex items-center gap-1 text-[11px] text-brand-soft hover:underline">
+                              <ExternalLink className="size-3" /> на Слетать
+                            </a>
+                          )}
+                          {g.head.reference_url && (
+                            <a href={g.head.reference_url} target="_blank" rel="noreferrer"
+                               className="inline-flex items-center gap-1 text-[11px] text-ocean hover:underline">
+                              <ExternalLink className="size-3" /> на Турвизоре
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2 whitespace-nowrap text-xs">
                         <Prices f={g.head} />
@@ -271,10 +279,14 @@ export default function MonitorPage() {
                         <td className="py-1.5 pr-3 text-muted">{paxLabel(f)}</td>
                         <td />
                         <td className="py-1.5 pr-3 text-muted">
-                          {f.search_url
-                            ? <a href={f.search_url} target="_blank" rel="noreferrer"
-                                 className="text-brand-soft hover:underline">открыть поиск</a>
-                            : null}
+                          {f.search_url && (
+                            <a href={f.search_url} target="_blank" rel="noreferrer"
+                               className="mr-2 text-brand-soft hover:underline">Слетать</a>
+                          )}
+                          {f.reference_url && (
+                            <a href={f.reference_url} target="_blank" rel="noreferrer"
+                               className="text-ocean hover:underline">Турвизор</a>
+                          )}
                         </td>
                         <td className="py-1.5"><Prices f={f} /></td>
                       </tr>

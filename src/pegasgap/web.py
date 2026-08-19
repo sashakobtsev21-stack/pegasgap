@@ -515,6 +515,11 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     "search_url": search_url_from_row(json.loads(r["params_json"]),
                                                      r["catalog_id"],
                                                      r["checked_checkin"]),
+                    # Ссылка на витрину: базовый адрес прогона плюс конкретный отель.
+                    "reference_url": (
+                        f'{r["reference_url"]}&x_hotel_codes={r["reference_hotel_id"]}'
+                        if r["reference_url"] and r["reference_hotel_id"]
+                        else r["reference_url"]),
                     "checked_checkin": r["checked_checkin"],
                     "checked_meal": r["checked_meal"],
                     "checked_room": r["checked_room"],

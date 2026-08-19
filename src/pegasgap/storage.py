@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS runs (
     checked_status      TEXT    NOT NULL,
     reference_hotels    INTEGER NOT NULL DEFAULT 0,
     checked_hotels      INTEGER NOT NULL DEFAULT 0,
+    reference_url       TEXT,
     matched_hotels      INTEGER NOT NULL DEFAULT 0,
     price_offset_pct    REAL,
     trustworthy         INTEGER NOT NULL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS gaps (
     diagnosis       TEXT    NOT NULL DEFAULT 'unknown',
     catalog_id      INTEGER,
     catalog_name    TEXT,
+    reference_hotel_id INTEGER,
     checked_checkin TEXT,
     checked_meal    TEXT,
     checked_room    TEXT,
@@ -98,6 +100,7 @@ _MIGRATIONS = {
     "runs": {
         "notes": "TEXT NOT NULL DEFAULT '[]'",
         "checked_hotels": "INTEGER NOT NULL DEFAULT 0",
+        "reference_url": "TEXT",
     },
     "gaps": {
         "diagnosis": "TEXT NOT NULL DEFAULT 'unknown'",
@@ -105,6 +108,7 @@ _MIGRATIONS = {
         "catalog_name": "TEXT",
         "reviewed": "INTEGER NOT NULL DEFAULT 0",
         "reviewed_at": "TEXT",
+        "reference_hotel_id": "INTEGER",
         "checked_checkin": "TEXT",
         "checked_meal": "TEXT",
         "checked_room": "TEXT",
@@ -158,16 +162,16 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
             """INSERT INTO runs (
                    run_at, scenario_key, operator, search_mode, departure_city,
                    destination_country, date_from, date_to, reference_status,
-                   checked_status, reference_hotels, checked_hotels,
+                   checked_status, reference_hotels, checked_hotels, reference_url,
                    matched_hotels, price_offset_pct,
                    trustworthy, problems, notes, unmatched, params_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 scan.run_at.isoformat(timespec="seconds"),
                 p.scenario_key(), scan.operator, p.search_mode, p.departure_city,
                 p.destination_country, p.date_from.isoformat(), p.date_to.isoformat(),
                 scan.reference_status.value, scan.checked_status.value,
-                scan.reference_hotels, scan.checked_hotels,
+                scan.reference_hotels, scan.checked_hotels, scan.reference_url,
                 scan.matched_hotels, scan.price_offset_pct,
                 int(scan.trustworthy),
                 json.dumps(scan.problems, ensure_ascii=False),
@@ -182,15 +186,15 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
             """INSERT INTO gaps (
                    run_id, gap_key, kind, hotel_name, stars, resort,
                    reference_price, checked_price, currency, matched_name, note,
-                   diagnosis, catalog_id, catalog_name,
+                   diagnosis, catalog_id, catalog_name, reference_hotel_id,
                    checked_checkin, checked_meal, checked_room)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (run_id, g.key(), g.kind.value, g.hotel_name, g.stars, g.resort,
                  str(g.reference_price) if g.reference_price is not None else None,
                  str(g.checked_price) if g.checked_price is not None else None,
                  g.currency, g.matched_name, g.note,
-                 g.diagnosis.value, g.catalog_id, g.catalog_name,
+                 g.diagnosis.value, g.catalog_id, g.catalog_name, g.reference_hotel_id,
                  g.checked_checkin.isoformat() if g.checked_checkin else None,
                  g.checked_meal, g.checked_room)
                 for g in scan.gaps
@@ -301,7 +305,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
     return conn.execute(
         f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
-                   r.search_mode, r.params_json, r.operator
+                   r.search_mode, r.params_json, r.operator, r.reference_url
               FROM gaps g JOIN runs r ON r.id = g.run_id
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    {"AND g.reviewed = 0" if only_open else ""}

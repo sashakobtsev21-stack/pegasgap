@@ -39,6 +39,7 @@ import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -73,6 +74,26 @@ REFERER = "https://tourvisor.ru/"
 # «страница ↔ formmode», а не просто наличие параметра.
 REFERRER_TOURS = "https://tourvisor.ru/tours/"
 REFERRER_HOTELS = "https://tourvisor.ru/poisk-otelej"
+
+# Страницы направлений, где витрина применяет параметры поиска из адреса. Их немного —
+# только те страны, у которых есть своя карта сайта. Путь при этом ЛИШЬ НОСИТЕЛЬ:
+# `s_country` и `s_flyfrom` в запросе перекрывают его полностью (проверено — адрес
+# турецко-московский, а форма показывает «Екатеринбург → Египет»). Слаг нужен только
+# чтобы заголовок страницы не расходился с содержимым.
+_LANDING_COUNTRIES = {
+    "Турция": "turkey", "Египет": "egipet", "Таиланд": "tailand", "ОАЭ": "oae",
+    "Вьетнам": "vietnam", "Абхазия": "abkhazia", "Шри-Ланка": "srilanka",
+    "Мальдивы": "maldives", "Куба": "cuba", "Китай": "kitai", "Тунис": "tunis",
+}
+_LANDING_CITIES = {
+    "Москва": "moskva", "Санкт-Петербург": "sankt-peterburg",
+    "Екатеринбург": "ekaterinburg", "Новосибирск": "novosibirsk", "Казань": "kazan",
+    "Самара": "samara", "Уфа": "ufa", "Красноярск": "krasnoyarsk", "Пермь": "perm",
+}
+# Запасной путь для направлений без своей страницы (Грузия, Россия): поиск по нему
+# отработает верно, разойдётся только заголовок. Пустой `/tours/` не годится — на нём
+# витрина параметры игнорирует, проверено.
+_LANDING_FALLBACK = "turkey/moskva"
 
 # «Город вылета» для режима без перелёта. Витрина моделирует проживание без билета как
 # отдельный псевдогород, а не отдельный вид поиска.
@@ -303,6 +324,7 @@ class TourvisorApiProvider:
             offers=offers, hotel_offers=hotel_offers, operator_offers=operator_offers,
             operators_no_tours=no_tours, operators_not_responding=not_responding,
             operator_filter_verified=operator_id is not None,
+            search_url=self._page_url(params, city_id, country_id, operator_id),
             # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
             # отель неотличим от отсутствующего.
             # Недогруженный отель неотличим от отсутствующего, поэтому обрезкой считается
@@ -383,6 +405,41 @@ class TourvisorApiProvider:
         if not request_id:
             raise TourvisorApiError("modsearch не вернул requestid")
         return request_id, list(result.get("operators") or [])
+
+    @staticmethod
+    def _page_url(params: SearchParams, city_id: int, country_id: int,
+                  operator_id: int | None) -> str:
+        """Адрес того же поиска на самой витрине — чтобы находку можно было открыть.
+
+        Формат снят с их собственного сборщика (`formUri` в core.min.js) и проверен
+        живьём. Ключевой параметр — `ts_dosearch=1`: без него страница показывает свои
+        значения по умолчанию, и ссылка вела бы на чужой поиск. Оператор — `s_oplimit`,
+        отель — `x_hotel_codes` (его добавляет вызывающий код, он знает конкретный отель).
+        """
+        hotels_only = params.search_mode == "hotels"
+        country = _LANDING_COUNTRIES.get(params.destination_country.strip())
+        city = _LANDING_CITIES.get(params.departure_city.strip())
+        path = f"{country}/{city}" if country and city else _LANDING_FALLBACK
+
+        fields = {
+            "ts_dosearch": 1,
+            "s_form_mode": 1 if hotels_only else 0,
+            "s_flyfrom": _NO_FLIGHT_DEPARTURE if hotels_only else city_id,
+            "s_country": country_id,
+            "s_nights_from": params.nights_min,
+            "s_nights_to": params.nights_max,
+            "s_j_date_from": params.date_from.strftime("%d.%m.%Y"),
+            "s_j_date_to": params.date_to.strftime("%d.%m.%Y"),
+            "s_adults": params.adults,
+            "s_currency": 0,
+        }
+        if params.children_ages:
+            fields["s_child"] = len(params.children_ages)
+            for i, age in enumerate(params.children_ages[:3], start=1):
+                fields[f"child_age_{i}"] = age
+        if operator_id is not None:
+            fields["s_oplimit"] = operator_id
+        return f"https://tourvisor.ru/tours/{path}?{urlencode(fields)}"
 
     @staticmethod
     def _referrer(params: SearchParams) -> str:
