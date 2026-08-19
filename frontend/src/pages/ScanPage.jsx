@@ -264,18 +264,35 @@ function FullScan() {
           то, что реально засеяно. */}
       {queue?.dimensions && (
         <p className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-muted">
-          Каждый кейс — это один поиск: оператор, город вылета, страна, окно дат,
-          длительность и состав туристов. Очередь — все их сочетания:{" "}
-          <b className="text-ink">{queue.dimensions.operators}</b> опер. ×{" "}
-          <b className="text-ink">{queue.dimensions.cities}</b> гор. ×{" "}
-          <b className="text-ink">{queue.dimensions.countries}</b> стран ×{" "}
-          <b className="text-ink">{queue.dimensions.windows}</b> окон ×{" "}
-          <b className="text-ink">{queue.dimensions.durations}</b> длит. ×{" "}
-          <b className="text-ink">{queue.dimensions.modes}</b> реж. Состав задаётся
-          в <code>scenarios.yaml</code> — там перечислены операторы, города, страны, окна
-          дат и длительности, а очередь это все их сочетания. Кнопка «Собрать очередь»
-          перечитывает файл и приводит очередь в соответствие: новые сочетания добавляет,
-          исчезнувшие отключает, историю проверок сохраняет.
+          Кейс — это один поиск: <b className="text-ink">оператор</b> +{" "}
+          <b className="text-ink">город вылета</b> +{" "}
+          <b className="text-ink">страна</b> +{" "}
+          <b className="text-ink">окно дат вылета</b> +{" "}
+          <b className="text-ink">длительность</b> +{" "}
+          <b className="text-ink">режим</b> (с перелётом или без). Очередь — все их
+          сочетания:
+          {(queue.dimensions.by_mode || []).map((m) => (
+            <span key={m.mode} className="mt-1 block pl-3">
+              {m.mode === "hotels" ? "отели (без перелёта)" : "туры (с перелётом)"} —{" "}
+              <b className="text-ink">{queue.dimensions.operators}</b> оператора ×{" "}
+              <b className="text-ink">{m.cities}</b>{" "}
+              {plural(m.cities, "город", "города", "городов")} вылета ×{" "}
+              <b className="text-ink">{queue.dimensions.countries}</b> стран ×{" "}
+              <b className="text-ink">{queue.dimensions.windows}</b>{" "}
+              {plural(queue.dimensions.windows, "окно", "окна", "окон")} ×{" "}
+              <b className="text-ink">{queue.dimensions.durations}</b>{" "}
+              {plural(queue.dimensions.durations, "длительность", "длительности", "длительностей")}
+              {" = "}<b className="text-ink">{m.cases}</b>
+              {m.mode === "hotels"
+                ? " — город здесь один: без перелёта он ни на что не влияет"
+                : ""}
+            </span>
+          ))}
+          <span className="mt-1 block">
+            Состав задаётся в <code>scenarios.yaml</code>. Кнопка «Собрать очередь»
+            перечитывает файл и приводит очередь в соответствие: новые сочетания
+            добавляет, исчезнувшие отключает, историю проверок сохраняет.
+          </span>
         </p>
       )}
 

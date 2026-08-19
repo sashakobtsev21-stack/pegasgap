@@ -294,7 +294,18 @@ def dimensions(conn: sqlite3.Connection) -> dict:
                   COUNT(DISTINCT adults || '+' || children_ages) AS pax
              FROM cases WHERE enabled = 1"""
     ).fetchone()
-    return dict(row) if row else {}
+    dims = dict(row) if row else {}
+    # Сколько кейсов даёт каждый режим. Считаем по факту, а не произведением измерений:
+    # в режиме «отели» город вылета схлопнут (перелёта нет), поэтому «операторы × города
+    # × страны × окна × длительности × режимы» даёт 7200 там, где в очереди 3960 — и
+    # подпись, показывающая такое произведение, попросту врёт.
+    dims["by_mode"] = [
+        {"mode": r["search_mode"], "cases": r["n"], "cities": r["cities"]}
+        for r in conn.execute(
+            """SELECT search_mode, COUNT(*) AS n, COUNT(DISTINCT departure_city) AS cities
+                 FROM cases WHERE enabled = 1 GROUP BY 1 ORDER BY 2 DESC""")
+    ]
+    return dims
 
 
 def composition(conn: sqlite3.Connection) -> list[dict]:
