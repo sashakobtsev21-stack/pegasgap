@@ -55,6 +55,14 @@ export default function MonitorPage() {
     getJson("/api/worker").then(setWorker).catch(() => {});
   }, [onlyOpen, limit, pick]);
 
+  /** Обновить только счётчики — список при этом остаётся на месте. */
+  const refreshSummary = useCallback(() => {
+    const q = new URLSearchParams({ days, only_open: onlyOpen, limit: 1, ...pick });
+    getJson(`/api/findings?${q}`)
+      .then((fresh) => setStored((prev) => prev && { ...prev, summary: fresh.summary }))
+      .catch(() => {});
+  }, [onlyOpen, pick]);
+
   useEffect(reload, [reload]);
   // Новая находка в потоке — подтягиваем накопленное, чтобы у строки появился id и с ней
   // можно было работать (отметить разобранной).
@@ -69,33 +77,31 @@ export default function MonitorPage() {
   async function toggleGroup(group) {
     const next = !group.reviewed;
     const ids = new Set(group.items.map((f) => f.id));
+    // Обновляем на месте и строки, И СЧЁТЧИК. Раньше правились только строки: галка
+    // загоралась, а «разобрано» оставалось нулём до следующей перезагрузки — выглядело
+    // так, будто отметка не сохранилась.
     setStored((prev) => prev && {
       ...prev,
       findings: prev.findings.map((f) => (ids.has(f.id) ? { ...f, reviewed: next } : f)),
+      summary: {
+        ...prev.summary,
+        unique_reviewed: (prev.summary?.unique_reviewed ?? 0) + (next ? 1 : -1),
+      },
     });
     try {
       // Один запрос на всю группу: сервер отмечает проблему, а не строки. Раньше здесь
       // шёл запрос на каждую строку, и отмечались только загруженные — остальные
       // (а их у проблемы бывает под полсотни) оставались неразобранными.
       await postJson(`/api/findings/${group.head.id}/review?reviewed=${next}`, {});
-    } catch {
-      reload();
+    } finally {
+      // Перечитываем ТОЛЬКО сводку, а не список. Полная перезагрузка пересобирала таблицу,
+      // отмеченная строка уезжала (выборка предпочитает неразобранные), и следующий клик
+      // попадал уже в другую проблему. Счётчик при этом должен быть серверный: он считает
+      // по всей базе, а не по загруженным пятистам строкам.
+      refreshSummary();
     }
   }
 
-  async function toggleReview(finding) {
-    const next = !finding.reviewed;
-    setStored((prev) => prev && {
-      ...prev,
-      findings: prev.findings.map((f) =>
-        f.id === finding.id ? { ...f, reviewed: next } : f),
-    });
-    try {
-      await postJson(`/api/findings/${finding.id}/review?reviewed=${next}`, {});
-    } catch {
-      reload();     // не приняли — возвращаем то, что на сервере
-    }
-  }
 
   return (
     <m.div variants={staggerContainer} initial="hidden" animate="show"
