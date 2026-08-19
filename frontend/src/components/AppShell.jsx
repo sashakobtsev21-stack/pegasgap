@@ -98,6 +98,9 @@ function StopButton() {
   if (!state?.running) return null;
 
   async function stop() {
+    // Обход идёт часами, и случайный клик по кнопке в шапке стоит дорого — однажды
+    // забытая открытая вкладка так и прибила проход на 1444-м кейсе.
+    if (!window.confirm("Остановить обход? Текущий кейс доработает до конца.")) return;
     setBusy(true);
     try {
       await postJson("/api/worker/stop", {}, { timeoutMs: 120_000 });

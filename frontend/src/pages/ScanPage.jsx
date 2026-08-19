@@ -269,8 +269,10 @@ function FullScan() {
           <b className="text-ink">{queue.dimensions.windows}</b> окон ×{" "}
           <b className="text-ink">{queue.dimensions.durations}</b> длит. ×{" "}
           <b className="text-ink">{queue.dimensions.modes}</b> реж. Состав задаётся
-          в <code>scenarios.yaml</code>, кнопка «Собрать очередь» приводит её в
-          соответствие с ним.
+          в <code>scenarios.yaml</code> — там перечислены операторы, города, страны, окна
+          дат и длительности, а очередь это все их сочетания. Кнопка «Собрать очередь»
+          перечитывает файл и приводит очередь в соответствие: новые сочетания добавляет,
+          исчезнувшие отключает, историю проверок сохраняет.
         </p>
       )}
 
@@ -296,7 +298,7 @@ function FullScan() {
         <button
           onClick={() => act("seed")}
           disabled={busy || running}
-          title="Привести очередь в соответствие scenarios.yaml"
+          title="Перечитать scenarios.yaml и привести очередь в соответствие с ним: новые сочетания добавить, исчезнувшие отключить. История проверок сохраняется"
           className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-muted transition-colors hover:text-ink disabled:opacity-50"
         >
           <ListPlus className="size-4" /> Собрать очередь

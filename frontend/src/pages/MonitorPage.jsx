@@ -72,6 +72,7 @@ export default function MonitorPage() {
   const queue = worker?.queue || stored?.summary?.queue || {};
   const summary = stored?.summary || {};
   const facets = stored?.facets || {};
+  const groups = stored ? groupFindings(stored.findings) : [];
 
   /** Отметить всю группу: одна проблема разбирается один раз, а не по разу на вариант. */
   async function toggleGroup(group) {
@@ -188,10 +189,14 @@ export default function MonitorPage() {
       <GlassCard variants={fadeUp} className="p-5">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <h2 className="text-base font-bold text-white">
+            {/* Считаем в ПРОБЛЕМАХ, как и карточка рядом. Раньше здесь стояли строки:
+                «показано 500 из 36788» при том, что таблица показывала полторы сотни
+                свёрнутых групп, а карточка — десять тысяч проблем. Три числа, три
+                разные единицы, и ни одно не сходилось с соседним. */}
             Чего нет на Слетать
-            {stored ? (stored.findings.length < (summary.total ?? 0)
-              ? ` · показано ${stored.findings.length} из ${summary.total}`
-              : ` · ${stored.findings.length}`) : ""}
+            {stored ? (groups.length < (summary.unique ?? 0)
+              ? ` · показано ${groups.length} из ${summary.unique}`
+              : ` · ${groups.length}`) : ""}
           </h2>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted">
             <Pick label="оператор" value={pick.operator} allLabel="все"
@@ -255,7 +260,7 @@ export default function MonitorPage() {
                 </tr>
               </thead>
               <tbody>
-                {groupFindings(stored.findings).map((g) => (
+                {groups.map((g) => (
                   <Fragment key={g.key}>
                     <tr className={`border-b border-white/5 align-top ${g.reviewed ? "opacity-45" : ""}`}>
                       <td className="py-2 pr-2">
@@ -375,12 +380,13 @@ export default function MonitorPage() {
           </div>
         )}
 
-        {stored && stored.findings.length < (summary.total ?? 0) && (
+        {stored && groups.length < (summary.unique ?? 0) && (
           <button
             onClick={() => setLimit((n) => n + 1000)}
             className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 text-sm font-semibold text-muted transition-colors hover:text-ink"
           >
-            Показать ещё · скрыто {summary.total - stored.findings.length}
+            Показать ещё · скрыто {summary.unique - groups.length}{" "}
+            {plural(summary.unique - groups.length, "проблема", "проблемы", "проблем")}
           </button>
         )}
       </GlassCard>
