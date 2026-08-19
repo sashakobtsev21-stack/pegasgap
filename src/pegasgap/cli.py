@@ -354,3 +354,77 @@ def report(
 
 if __name__ == "__main__":
     app()
+
+
+async def _fill_links(db: Path) -> tuple[int, int]:
+    """Проставить прогонам ссылку на витрину, а находкам — id отеля на ней.
+
+    Данных для этого достаточно и задним числом: параметры прогона сохранены целиком, а
+    имя отеля в находке — это имя С ВИТРИНЫ, значит оно ищется в её же справочнике.
+    Возвращает (сколько прогонов, сколько находок).
+    """
+    import json
+
+    import httpx
+
+    from pegasgap.providers import get_provider, load_providers
+    from pegasgap.providers.tourvisor_api import _find_id, _items
+
+    load_providers()
+    factory = get_provider("tourvisor_api")
+    provider = factory() if isinstance(factory, type) else factory
+
+    runs_done = gaps_done = 0
+    async with httpx.AsyncClient(timeout=90) as client:
+        lists = await provider._reference(client)
+        cities = _items(lists, "departures", "departure")
+        countries = _items(lists, "allcountry", "country")
+        # Словарь отелей страны тянется по два мегабайта, поэтому строго по одному разу.
+        by_country: dict[int, dict[str, int]] = {}
+
+        with storage.session(db) as conn:
+            rows = conn.execute(
+                "SELECT id, params_json, operator FROM runs WHERE reference_url IS NULL"
+            ).fetchall()
+            for row in rows:
+                params = json.loads(row["params_json"])
+                city_id = _find_id(cities, params["departure_city"])
+                country_id = _find_id(countries, params["destination_country"])
+                if not city_id or not country_id:
+                    continue
+                operator_id = provider._operator_id(lists, row["operator"])
+                url = provider._page_url(
+                    SearchParams(**params), city_id, country_id, operator_id)
+                conn.execute("UPDATE runs SET reference_url = ? WHERE id = ?",
+                             (url, row["id"]))
+                runs_done += 1
+
+                if country_id not in by_country:
+                    hotels = await provider._hotels(client, country_id)
+                    by_country[country_id] = {
+                        str(h.get("name", "")).strip().casefold(): hid
+                        for hid, h in hotels.items() if h.get("name")}
+                index = by_country[country_id]
+                for gap in conn.execute(
+                        "SELECT id, hotel_name FROM gaps "
+                        "WHERE run_id = ? AND reference_hotel_id IS NULL", (row["id"],)):
+                    hid = index.get(str(gap["hotel_name"]).strip().casefold())
+                    if hid:
+                        conn.execute("UPDATE gaps SET reference_hotel_id = ? WHERE id = ?",
+                                     (hid, gap["id"]))
+                        gaps_done += 1
+    return runs_done, gaps_done
+
+
+@app.command("fill-links")
+def fill_links(
+    db: Path = typer.Option(storage.DEFAULT_DB, "--db", help="Файл базы"),
+) -> None:
+    """Дозаполнить ссылки на витрину в уже сохранённых прогонах.
+
+    Нужна один раз после появления самих ссылок: прогоны, сделанные раньше, о них не
+    знают, а перепроверятся они нескоро — и до тех пор треть отчёта осталась бы без
+    ссылки без всякой на то причины.
+    """
+    runs, gaps = asyncio.run(_fill_links(db))
+    console.print(f"[bold]Готово:[/bold] прогонов {runs}, находок {gaps}")
