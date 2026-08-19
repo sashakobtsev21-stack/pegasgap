@@ -74,7 +74,7 @@ export default function GapsPage({ runId }) {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <Stat label="эталон" value={`${data.reference_status} · ${data.reference_hotels} отелей`} />
+          <Stat label="Турвизор" value={`${data.reference_status} · ${data.reference_hotels} отелей`} />
           <Stat label="наша выдача" value={data.checked_status} />
           <Stat label="сопоставлено" value={data.matched_hotels} />
           {data.price_offset_pct != null && (

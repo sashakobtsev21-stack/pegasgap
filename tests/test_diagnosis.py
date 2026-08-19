@@ -10,7 +10,7 @@ from decimal import Decimal
 from pegasgap.catalog import CatalogHotel
 from pegasgap.diagnosis import CatalogIndex, diagnose, diagnose_gap
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
-from pegasgap.linking import LinkSet
+from pegasgap.linking import Direction, LinkSet
 from pegasgap.models import (
     GapKind,
     HotelDiagnosis,
@@ -252,3 +252,37 @@ def test_no_catalog_cannot_refute_anything():
     diagnose(scan, [], NO_DB)
 
     assert not scan.trustworthy
+
+
+# --- Новые признаки справочников ---------------------------------------------------
+
+def test_disabled_hotel_is_its_own_verdict_not_a_linking_problem():
+    """Связь может быть в порядке, но выключенный отель не покажут всё равно —
+    и чинить надо не связь."""
+    links = LinkSet(operator="Pegas Touristik", linked_ids=frozenset({46066}),
+                    disabled_ids=frozenset({46066}))
+    g = diagnosed("Kemer Star Hotel", links=links)
+    assert g.diagnosis is HotelDiagnosis.CATALOG_DISABLED
+    assert "выключен" in g.note
+
+
+def test_unregistered_direction_is_noted_on_the_whole_run():
+    """Пока пары «город вылета → страна» нет у оператора, правки по отелям бесполезны."""
+    scan = scan_with([gap("Kemer Star Hotel")])
+    diagnose(scan, CATALOG, LinkSet.unavailable(), Direction(known=False))
+    assert any("не заведено" in n for n in scan.notes)
+
+
+def test_unchecked_direction_says_nothing():
+    """«Не смотрели» — не то же самое, что «не заведено»: спутать значит отправить
+    человека заводить направление, которое давно заведено."""
+    scan = scan_with([gap("Kemer Star Hotel")])
+    diagnose(scan, CATALOG, LinkSet.unavailable(), Direction.unchecked())
+    assert not any("не заведено" in n for n in scan.notes)
+
+
+def test_direction_registered_only_without_flight():
+    scan = scan_with([gap("Kemer Star Hotel")])
+    diagnose(scan, CATALOG, LinkSet.unavailable(),
+             Direction(known=True, with_flight=False, without_flight=True))
+    assert any("не в режиме" in n for n in scan.notes)

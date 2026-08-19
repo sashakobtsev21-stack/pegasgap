@@ -19,7 +19,7 @@ from collections import defaultdict
 
 from pegasgap.catalog import CatalogHotel
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
-from pegasgap.linking import LinkSet
+from pegasgap.linking import Direction, LinkSet
 from pegasgap.matching import Confidence, compare, core
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
@@ -118,7 +118,12 @@ def diagnose_gap(gap: HotelGap, index: CatalogIndex, links: LinkSet) -> None:
         gap.note = where
         return
 
-    if links.has(hotel.id):
+    if links.is_disabled(hotel.id):
+        # Проверяется раньше линковки: связь может быть в порядке, но выключенный отель
+        # не покажут всё равно, и чинить надо не связь.
+        gap.diagnosis = HotelDiagnosis.CATALOG_DISABLED
+        gap.note = f"{where} — выключен в справочнике Слетать"
+    elif links.has(hotel.id):
         gap.diagnosis = HotelDiagnosis.LINKED_NO_OFFER
         gap.note = f"{where} — связан с каталогом оператора"
     else:
@@ -176,7 +181,8 @@ def refute_match_collapse(scan: ScanResult, targets: list[HotelGap]) -> None:
         f"и дело не в матчинге, а в отсутствии предложений у оператора")
 
 
-def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet) -> ScanResult:
+def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet,
+             direction: Direction | None = None) -> ScanResult:
     """Разобрать причины всех отельных пропусков прогона.
 
     Диагноз ставится только классу «отельный пропуск»: для полного пропуска и для отказа
@@ -196,6 +202,26 @@ def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet) -> S
         scan.notes.append("справочник отелей Слетать недоступен — причины пропусков "
                           "не разобраны")
     elif not links.available and targets:
-        scan.notes.append("линковка оператора не проверялась (нет доступа к плагинной базе) "
+        scan.notes.append("линковка оператора не проверялась (нет доступа к справочникам) "
                           "— различить «нет линковки» и «нет наличия» не удалось")
+    _note_direction(scan, direction)
     return scan
+
+
+def _note_direction(scan: ScanResult, direction: Direction) -> None:
+    """Отметить, что направление у оператора вообще не заведено.
+
+    Это не отельная причина, а причина всего прогона: правки по отелям тут бесполезны,
+    пока пары «город вылета → страна» нет в справочнике направлений оператора. Молчание
+    при недоступной базе обязательно — «не смотрели» не то же самое, что «не заведено».
+    """
+    if direction is None or not direction.available:
+        return
+    where = f"{scan.params.departure_city} → {scan.params.destination_country}"
+    if not direction.known:
+        scan.notes.append(f"направление {where} у оператора «{scan.operator}» "
+                          f"не заведено в справочнике — предложений тут и не будет")
+    elif not direction.serves(scan.params.search_mode):
+        mode = "без перелёта" if scan.params.search_mode == "hotels" else "с перелётом"
+        scan.notes.append(f"направление {where} у оператора «{scan.operator}» заведено, "
+                          f"но не в режиме «{mode}»")

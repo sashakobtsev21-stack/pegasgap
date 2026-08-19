@@ -365,6 +365,7 @@ class SletatApiProvider:
             operator_filter_verified=filter_applied,
             param_mismatches=mismatched,
             truncated=truncated,
+            request_id=request_id,
         )
 
     def _operator_off(self, params: SearchParams, start: float, operator: str,

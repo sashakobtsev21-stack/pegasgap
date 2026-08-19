@@ -240,24 +240,18 @@ def test_weak_match_lands_in_review_not_in_gaps():
     assert len(scan.unmatched) == 1
 
 
-def test_lopsided_coverage_suppresses_reverse_noise(monkeypatch):
-    """Регресс живого прогона: эталон показал 14 отелей, наша сторона 962 — и инструмент
-    выдал 949 «обратных пропусков», похоронив под ними настоящие находки.
-
-    Перекос идёт ЗАМЕТКОЙ, а не проблемой: объём программы оператора на площадках
-    отличается в разы в обе стороны, и это их устройство, а не сбор. Считать это
-    поломкой значило бы объявлять
-    недостоверным каждый прогон и обесценить инструмент целиком. Прямое направление
-    (отель есть на эталоне, у нас нет) от перекоса не страдает.
-    """
+def test_lopsided_coverage_is_explained_not_hidden(monkeypatch):
+    """Раньше перекос объёмов прятал обратную сторону целиком. Это была подпорка под
+    настоящую причину — недочитанную выдачу витрины. Когда обе выдачи полные, разница
+    объёмов и есть результат, а не помеха; о ней достаточно предупредить."""
     monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel(f"Ref {i}", "100000", "tourvisor") for i in range(3)])
     chk = result("sletat", [hotel(f"Ref {i}", "100000", "sletat") for i in range(3)]
                  + [hotel(f"Extra {i}", "100000", "sletat") for i in range(40)])
     scan = detect(PARAMS, ref, chk)
-    assert scan.gaps_of(GapKind.REVERSE) == []
+    assert len(scan.gaps_of(GapKind.REVERSE)) == 40
     assert scan.trustworthy
-    assert any("объёмы несопоставимы" in n for n in scan.notes)
+    assert any("объёмы площадок расходятся" in n for n in scan.notes)
 
 
 def test_hotel_gaps_survive_lopsided_coverage():
@@ -292,13 +286,18 @@ def test_truncated_reference_only_costs_completeness():
     assert any("не целиком" in n for n in scan.notes)
 
 
-def test_truncated_reference_is_a_problem_when_reverse_is_on(monkeypatch):
-    """«Есть у нас, нет у эталона» на недочитанном эталоне выдумано поголовно."""
+def test_truncated_tourvisor_silences_the_reverse_side_but_keeps_the_run(monkeypatch):
+    """«Есть у нас, нет у них» на недочитанной выдаче выдумано поголовно — эту сторону
+    надо молчать. Но прямая сторона от обрезки не страдает, и брать прогон целиком в брак
+    значит выбрасывать годный результат вместе с негодным."""
     monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")], truncated=True)
-    chk = result("sletat", [hotel("A Palace", "100000", "sletat")])
+    chk = result("sletat", [hotel("A Palace", "100000", "sletat"),
+                            hotel("C Beach", "95000", "sletat")])
     scan = detect(PARAMS, ref, chk)
-    assert not scan.trustworthy
+    assert scan.gaps_of(GapKind.REVERSE) == []
+    assert scan.trustworthy
+    assert any("прочитана не до конца" in n for n in scan.notes)
 
 
 def test_comparable_coverage_still_reports_reverse(monkeypatch):
@@ -369,16 +368,16 @@ def test_plausible_offset_still_yields_findings():
     assert scan.trustworthy
 
 
-def test_reverse_gaps_are_off_by_default():
-    """Живой обход дал 587 обратных пропусков из 641 находки: витрина показывает по
-    оператору выборку, мы отдаём каталог целиком, и каждый лишний отель у нас становился
-    «находкой». Инструмент ищет, чего нет У НАС, — зеркало топит настоящие находки."""
+def test_reverse_gaps_are_reported_by_default():
+    """Витрина больше не эталон, а вторая площадка: вопрос стоит в обе стороны. Прежнее
+    молчание объяснялось потоком находок, но поток шёл от того, что их выдачу читали на
+    десять страниц, а свою целиком, — а не от того, что находки ложные."""
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")])
     chk = result("sletat", [hotel("A Palace", "100000", "sletat"),
                             hotel("C Beach", "95000", "sletat")])
     scan = detect(PARAMS, ref, chk)
-    assert scan.gaps_of(GapKind.REVERSE) == []
-    assert any("обратные пропуски не показаны" in n for n in scan.notes)
+    reverse = scan.gaps_of(GapKind.REVERSE)
+    assert [g.hotel_name for g in reverse] == ["C Beach"]
 
 
 def test_two_pairs_are_too_few_to_judge_price():

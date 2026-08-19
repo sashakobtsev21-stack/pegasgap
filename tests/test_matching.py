@@ -10,8 +10,10 @@ from pegasgap.matching import Confidence, compare, match_hotels, normalize
 from pegasgap.models import HotelOffer
 
 
-def h(name: str, price: str = "100000", stars: int | None = None, provider: str = "tourvisor"):
-    return HotelOffer(provider=provider, hotel_name=name, price=Decimal(price), stars=stars)
+def h(name: str, price: str = "100000", stars: int | None = None, provider: str = "tourvisor",
+      dest: str | None = None):
+    return HotelOffer(provider=provider, hotel_name=name, price=Decimal(price), stars=stars,
+                      destination=dest)
 
 
 # --------------------------------- нормализация ---------------------------------
@@ -186,3 +188,46 @@ def test_two_stars_apart_still_needs_a_human():
     conf, reason = compare(h("Rixos Premium", stars=5), h("Rixos Premium", stars=3))
     assert conf is Confidence.WEAK
     assert "звёзды" in reason
+
+
+# --- Разные алфавиты ---------------------------------------------------------------
+
+def test_same_name_in_the_other_alphabet_is_the_same_hotel():
+    """Живые пары из Абхазии: витрина пишет кириллицей, мы латиницей. Побуквенно это
+    разные строки, и отель уходил в пропуски, которых нет."""
+    assert compare(h("АРДА (БЫВШ. СОФЬЯ)"), h("Arda"))[0].comparable
+    assert compare(h("ТАМЫШ ВИЛЛАДЖ (TAMISH VILLAGE)"), h("Тамыш Village"))[0].comparable
+    assert compare(h("КОРАЛЛ"), h("Guest House Korall"))[0].comparable
+    assert compare(h("LAVRA"), h("Лавра"))[0].comparable
+
+
+def test_transliteration_never_reaches_exact():
+    """Транслитерация огрубляет написание, буквальным совпадением это не было. EXACT
+    оставляем только настоящему совпадению — иначе не отличить одно от другого."""
+    conf, reason = compare(h("АРДА"), h("Arda"))
+    assert conf is Confidence.STRONG
+    assert "алфавит" in reason
+
+
+def test_fuzzy_across_alphabets_needs_the_resort_to_agree():
+    """«Grace» через кириллицу возвращается как «greis» — точного равенства уже нет, и
+    решает нечёткое сравнение. Без подпорки курортом оно молчит: склеить два разных
+    отеля дороже, чем не склеить один."""
+    same = compare(h("ГРЕЙС ФАОРС", dest="Гудаута"), h("Grace Faors", dest="Гудаута"))
+    assert same[0].comparable
+    apart = compare(h("ГРЕЙС ФАОРС", dest="Гудаута"), h("Grace Faors", dest="Гагра"))
+    assert not apart[0].comparable
+
+
+def test_stars_still_veto_a_cross_alphabet_match():
+    conf, reason = compare(h("АРДА", stars=3, dest="Гагра"),
+                           h("Arda", stars=5, dest="Гагра"))
+    assert conf is Confidence.WEAK
+    assert "звёзды" in reason
+
+
+def test_different_hotels_do_not_collide_through_transliteration():
+    assert compare(h("РИКСОС", dest="Анталья"), h("Hilton", dest="Анталья"))[0] \
+        is Confidence.NONE
+    assert compare(h("САНРАЙЗ", dest="Хургада"), h("Sun City", dest="Хургада"))[0] \
+        is Confidence.NONE

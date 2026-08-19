@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from enum import StrEnum
 
 from pegasgap.models import HotelOffer
@@ -71,6 +72,68 @@ _MIN_CORE_FOR_CONTAINMENT = 7
 _MIN_MEANINGFUL_CORE = 3
 
 _WEAK_JACCARD = 0.6
+
+# --- Разные алфавиты ---------------------------------------------------------------
+#
+# Один и тот же отель площадки пишут разными алфавитами: у нас «Grace Faors», у витрины
+# «ГРЕЙС ФАОРС»; у нас «Arda», у витрины «АРДА». Побуквенно это разные строки, и отель
+# уходил в пропуски, которых нет. Замер по Абхазии: 3 находки из 14 (21%) были такими
+# фантомами, а в обратную сторону они же раздували «есть только у нас».
+#
+# Приводим обе стороны к латинице. Транслитерация неточна и в обратную сторону теряет
+# исходное написание (Grace → Грейс → greis), поэтому одного равенства мало — дальше
+# идёт нечёткое сравнение, а чтобы оно не начало склеивать разные отели, требуются
+# подпорки: звёзды не противоречат и курорт совпадает.
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh",
+    "з": "z", "и": "i", "й": "i", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",
+    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c",
+    "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "i", "ь": "", "э": "e",
+    "ю": "iu", "я": "ia",
+}
+
+_DOUBLES = re.compile(r"(.)\1+")
+
+# Порог, выше которого нечёткое совпадение считается тем же отелем. Подобран по живым
+# парам: «ГРЕЙС ФАОРС»/«Grace Faors» дают 0.80, «ТАМЫШ ВИЛЛАДЖ»/«Тамыш Village» — 1.00.
+# Ниже 0.78 начинается мусор, поэтому там сравнение просто молчит.
+_FUZZY_STRONG = 0.88
+_FUZZY_WEAK = 0.78
+
+
+def translit(text: str) -> str:
+    """Кириллица → латиница. Латиница остаётся как есть."""
+    return "".join(_TRANSLIT.get(ch, ch) for ch in (text or "").lower())
+
+
+def ascii_core(name: str) -> str:
+    """Ядро названия в общем алфавите.
+
+    Кроме транслитерации схлопываем удвоенные буквы («Коралл» → koral) и сводим `y` к
+    `i`: и то и другое площадки пишут вразнобой, а различать отели по этому нельзя.
+    """
+    s = _DOUBLES.sub(r"\1", translit(normalize(name)))
+    return s.replace("y", "i").replace(" ", "")
+
+
+def ascii_cores(name: str) -> list[str]:
+    """Ядра всех форм названия в общем алфавите."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for form in variants(name):
+        key = ascii_core(form)
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def _same_resort(a: HotelOffer, b: HotelOffer) -> bool:
+    """Курорты совпадают. Неизвестный курорт подпоркой не считается."""
+    ra, rb = ascii_core(a.destination or ""), ascii_core(b.destination or "")
+    if not ra or not rb:
+        return False
+    return ra == rb or ra in rb or rb in ra
 
 
 class Confidence(StrEnum):
@@ -193,6 +256,39 @@ def _pair_confidence(ca: str, cb: str) -> Confidence:
     return Confidence.NONE
 
 
+def _cross_script(a: HotelOffer, b: HotelOffer) -> tuple[Confidence, str]:
+    """Сравнение через общий алфавит — для пар вроде «ГРЕЙС ФАОРС» и «Grace Faors».
+
+    Осторожнее обычного сравнения, потому что транслитерация огрубляет написание и
+    сближает то, что в оригинале различалось. Поэтому:
+
+    * точное равенство ядер даёт STRONG, а не EXACT: буквальным совпадением это не было;
+    * нечёткое совпадение получает силу только с подпорками — звёзды не противоречат и
+      курорт тот же. Без подпорок остаётся WEAK и уходит в корзину проверки, а не в
+      пропуски. Ложная пара здесь дороже пропущенной: она молча прячет настоящий пропуск.
+    """
+    exact_in_ascii = False
+    best_ratio = 0.0
+    for ca in ascii_cores(a.hotel_name):
+        for cb in ascii_cores(b.hotel_name):
+            if not ca or not cb:
+                continue
+            if _pair_confidence(ca, cb) is not Confidence.NONE:
+                exact_in_ascii = True
+            best_ratio = max(best_ratio, SequenceMatcher(None, ca, cb).ratio())
+
+    if not exact_in_ascii and best_ratio < _FUZZY_WEAK:
+        return Confidence.NONE, ""
+    if _stars_conflict(a, b):
+        return Confidence.WEAK, f"похоже на то же название, но звёзды разошлись ({a.stars} и {b.stars})"
+    if exact_in_ascii:
+        return Confidence.STRONG, "то же название другим алфавитом"
+    if best_ratio >= _FUZZY_STRONG or _same_resort(a, b):
+        where = ", курорт тот же" if _same_resort(a, b) else ""
+        return Confidence.STRONG, f"написание другим алфавитом ({best_ratio:.0%}{where})"
+    return Confidence.WEAK, f"похоже на то же название другим алфавитом ({best_ratio:.0%})"
+
+
 _ORDER = {Confidence.NONE: 0, Confidence.WEAK: 1, Confidence.STRONG: 2, Confidence.EXACT: 3}
 
 
@@ -210,6 +306,10 @@ def compare(a: HotelOffer, b: HotelOffer) -> tuple[Confidence, str]:
                 best = level
 
     if best is Confidence.NONE:
+        # Разные алфавиты: в своём написании пары нет, но она может быть в общем.
+        level, reason = _cross_script(a, b)
+        if level is not Confidence.NONE:
+            return level, reason
         # Последний шанс — совпадение по значимым словам. Помогает там, где порядок слов
         # разный, а ядра из-за этого не вкладываются друг в друга.
         sim = _jaccard(tokens(a.hotel_name), tokens(b.hotel_name))

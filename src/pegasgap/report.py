@@ -27,7 +27,7 @@ from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 CSV_COLUMNS = [
     "run_at", "режим", "город вылета", "страна", "даты", "класс", "отель", "звёзды",
-    "курорт", "цена эталон", "цена наша", "разница %", "новая",
+    "курорт", "цена Турвизор", "цена Слетать", "разница %", "новая",
     "причина", "id в справочнике", "что делать", "комментарий",
 ]
 
@@ -59,8 +59,8 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
         f"{p.date_from:%d.%m} – {p.date_to:%d.%m}, {p.nights_min}–{p.nights_max} ноч., "
         f"режим «{'туры' if p.search_mode == 'tours' else 'отели'}», оператор {scan.operator}")
     console.print(
-        f"эталон: [cyan]{scan.reference_status.value}[/cyan] ({scan.reference_hotels} отелей)   "
-        f"наша выдача: [cyan]{scan.checked_status.value}[/cyan]   "
+        f"Турвизор: [cyan]{scan.reference_status.value}[/cyan] ({scan.reference_hotels} отелей)   "
+        f"Слетать: [cyan]{scan.checked_status.value}[/cyan]   "
         f"сопоставлено: {scan.matched_hotels}"
         + (f"   систематический сдвиг цен: {scan.price_offset_pct:+.1f}%"
            if scan.price_offset_pct is not None else ""))
@@ -85,8 +85,8 @@ def render_scan(scan: ScanResult, new_keys: set[str] | None = None,
         table.add_column("класс")
         table.add_column("отель")
         table.add_column("причина")
-        table.add_column("эталон", justify="right")
-        table.add_column("наша", justify="right")
+        table.add_column("Турвизор", justify="right")
+        table.add_column("Слетать", justify="right")
         table.add_column("Δ", justify="right")
         table.add_column("комментарий", overflow="fold")
         for gap in sorted(scan.gaps, key=lambda g: (g.key() not in new_keys, g.kind)):

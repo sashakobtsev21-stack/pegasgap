@@ -32,7 +32,7 @@ from pegasgap.catalog import fetch_catalog, resolve_country_id
 from pegasgap.diagnosis import diagnose
 from pegasgap.events import bus
 from pegasgap.gaps import detect
-from pegasgap.linking import load_links
+from pegasgap.linking import load_direction, load_links
 from pegasgap.models import (
     PEGAS,
     GapKind,
@@ -41,6 +41,7 @@ from pegasgap.models import (
     SearchParams,
 )
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
+from pegasgap.pluginlog import fetch_causes
 from pegasgap.proxies import pool, reload_pool
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 from pegasgap.searchlink import search_url_from_row
@@ -117,8 +118,15 @@ async def _diagnose(scan: ScanResult) -> None:
         return
     country_id = await resolve_country_id(scan.params.destination_country)
     catalog = await fetch_catalog(country_id) if country_id else []
-    links = await asyncio.to_thread(load_links)
-    diagnose(scan, catalog, links)
+    links = await asyncio.to_thread(load_links, scan.operator)
+    direction = await asyncio.to_thread(
+        load_direction, scan.operator, scan.params.departure_city,
+        scan.params.destination_country)
+    diagnose(scan, catalog, links, direction)
+    # Причина со стороны самого поиска: справочники объясняют, почему отель
+    # НЕ МОГ появиться, а логи — почему его не оказалось при живом поиске.
+    for cause in await fetch_causes(scan.checked_request_id):
+        scan.notes.append(f"логи поиска: {cause}")
 
 
 async def run_scan(params: SearchParams, operator: str, db_path: Path,
