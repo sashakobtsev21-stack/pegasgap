@@ -237,3 +237,55 @@ def test_operator_disabled_on_a_direction_is_a_fact_not_a_breakage():
 
     resolve = inspect.getsource(SletatApiProvider._resolve_operator)
     assert '"disabled"' in resolve and '"missing"' in resolve
+
+
+# --------------------- фильтр по оператору проверяется по выдаче ---------------------
+
+def _row(operator: str, hotel: str = "A Palace") -> list:
+    from pegasgap.providers.sletat_api import (
+        IDX_HOTEL_ID,
+        IDX_HOTEL_NAME,
+        IDX_OPERATOR_NAME,
+        IDX_PRICE,
+        IDX_STARS,
+    )
+    row = [""] * (IDX_OPERATOR_NAME + 1)
+    row[IDX_HOTEL_ID] = 1
+    row[IDX_HOTEL_NAME] = hotel
+    row[IDX_STARS] = "4*"
+    row[IDX_PRICE] = "100000 RUB"
+    row[IDX_OPERATOR_NAME] = operator
+    return row
+
+
+def test_pure_output_confirms_the_filter():
+    """На живых замерах доля строк запрошенного оператора ровно 100%, а операторов в
+    выдаче ровно один."""
+    from pegasgap.providers.sletat_api import own_rows_share
+    rows = [_row("Pegas Touristik", f"H{i}") for i in range(10)]
+    assert own_rows_share(rows, "Pegas Touristik") == 1.0
+
+
+def test_foreign_rows_mean_the_filter_did_not_apply():
+    """Отсев чужих строк спасает от чужих ЦЕН, но не от неполноты: если `f_to_id`
+    перестанет действовать, страницы забьются всеми операторами, наших отелей придёт
+    втрое меньше, и недостающие превратятся в «туров нет по отелю»."""
+    from pegasgap.providers.sletat_api import MIN_OWN_ROWS_SHARE, own_rows_share
+    rows = ([_row("Pegas Touristik", f"H{i}") for i in range(3)]
+            + [_row("Coral Travel", f"C{i}") for i in range(7)])
+    share = own_rows_share(rows, "Pegas Touristik")
+    assert share == 0.3
+    assert share < MIN_OWN_ROWS_SHARE
+
+
+def test_empty_output_gives_no_verdict_about_the_filter():
+    """Пустая выдача — не улика: судить о фильтре не по чему, и объявлять прогон
+    негодным на этом основании значило бы бить по «туров нет совсем»."""
+    from pegasgap.providers.sletat_api import own_rows_share
+    assert own_rows_share([], "Pegas Touristik") is None
+
+
+def test_regional_clone_counts_as_a_foreign_operator():
+    from pegasgap.providers.sletat_api import own_rows_share
+    rows = [_row("Pegas Touristik"), _row("Pegas UZ")]
+    assert own_rows_share(rows, "Pegas Touristik") == 0.5

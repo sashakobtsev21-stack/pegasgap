@@ -69,3 +69,16 @@ def test_shop_saying_there_is_no_next_page_is_completeness():
     blocks, finished, complete = _collect([[1, 2]], stop_after=0)
     assert finished and complete
     assert tourvisor_api._hotel_codes(blocks) == {1, 2}
+
+
+def test_foreign_block_means_the_filter_did_not_apply():
+    """Витрина размечает блоки идентификатором ТО, поэтому чужой блок означает ровно
+    одно: серверный фильтр не применился, и выдача недобрана."""
+    ours = [{"operator": 12, "hotel": []}]
+    mixed = [{"operator": 12, "hotel": []}, {"operator": 11, "hotel": []}]
+    assert tourvisor_api._blocks_are_ours(ours, 12)
+    assert not tourvisor_api._blocks_are_ours(mixed, 12)
+
+
+def test_empty_result_is_not_evidence_against_the_filter():
+    assert tourvisor_api._blocks_are_ours([], 12)

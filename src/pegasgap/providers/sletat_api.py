@@ -171,6 +171,31 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+# Какая доля строк должна принадлежать запрошенному оператору, чтобы считать серверный
+# фильтр применённым. На живых замерах доля ровно 100% и оператор в выдаче ровно один —
+# так что порог щедрый, он ловит не шум, а отказ фильтра целиком.
+#
+# Проверять это обязательно. Отсев чужих строк в `build_hotel_offers` спасает от чужих
+# ЦЕН, но не от неполноты: если `f_to_id` перестанет действовать, страницы забьются
+# выдачей всех операторов, наших отелей придёт втрое меньше, и недостающие превратятся
+# в «туров нет по отелю». Ровно так нас однажды подвёл незавершённый поиск.
+MIN_OWN_ROWS_SHARE = 0.9
+
+
+def own_rows_share(rows: list[list], operator: str) -> float | None:
+    """Доля строк запрошенного оператора. None — судить не по чему (пустая выдача)."""
+    if not operator:
+        return None
+    total = mine = 0
+    for row in rows:
+        if not isinstance(row, list) or len(row) <= IDX_OPERATOR_NAME:
+            continue
+        total += 1
+        if operator_matches(str(row[IDX_OPERATOR_NAME] or ""), operator):
+            mine += 1
+    return mine / total if total else None
+
+
 def build_hotel_offers(rows: list[list], operator: str) -> list[HotelOffer]:
     """Строки `aaData` → предложения по отелям указанного оператора, мин. цена на отель.
 
@@ -294,6 +319,14 @@ class SletatApiProvider:
             return self._fail(params, start, str(exc))
 
         dur = time.monotonic() - start
+        # Фильтр считается применённым, только если выдача это подтверждает. Раньше
+        # признаком было «нашли идентификатор оператора», то есть намерение, а не факт.
+        share = own_rows_share(rows, operator)
+        filter_applied = operator_id is not None and (
+            share is None or share >= MIN_OWN_ROWS_SHARE)
+        if share is not None and share < MIN_OWN_ROWS_SHARE:
+            log.warning("Слетать (шлюз): фильтр по оператору не сработал — строк «%s» "
+                        "лишь %.0f%%", operator, share * 100)
         priced, no_tours, not_responding = split_load_state(states)
         hotels = build_hotel_offers(rows, operator)
         offers = [o for o in priced if not operator or operator_matches(o.operator, operator)]
@@ -311,7 +344,7 @@ class SletatApiProvider:
             operators_no_tours=no_tours, operators_not_responding=not_responding,
             # Фильтр применяет сервер (filter=1&f_to_id), а состав выдачи дополнительно
             # проверяется по имени оператора в каждой строке.
-            operator_filter_verified=operator_id is not None,
+            operator_filter_verified=filter_applied,
             truncated=truncated,
         )
 

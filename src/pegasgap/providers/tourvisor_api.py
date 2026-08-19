@@ -131,6 +131,19 @@ def _to_float(value: Any) -> float | None:
     return result or None
 
 
+def _blocks_are_ours(blocks: list[dict], operator_id: int) -> bool:
+    """Все ли блоки выдачи принадлежат запрошенному оператору.
+
+    Витрина размечает блоки идентификатором ТО, поэтому чужой блок означает ровно одно:
+    серверный фильтр не применился. Отсев чужих блоков в `build_hotel_offers` уберёт из
+    результата чужие цены, но не вернёт недостающие страницы наших — а недобор выдачи
+    превращается в выдуманные пропуски.
+    """
+    seen = {_to_int(b.get("operator")) for b in blocks}
+    seen.discard(None)
+    return not seen or seen == {operator_id}
+
+
 def _hotel_codes(blocks: list[dict]) -> set[int]:
     """Идентификаторы отелей во всех блоках — по ним меряется прирост страницы."""
     return {
@@ -323,7 +336,8 @@ class TourvisorApiProvider:
             duration_seconds=dur, search_mode=params.search_mode,
             offers=offers, hotel_offers=hotel_offers, operator_offers=operator_offers,
             operators_no_tours=no_tours, operators_not_responding=not_responding,
-            operator_filter_verified=operator_id is not None,
+            operator_filter_verified=(
+                operator_id is not None and _blocks_are_ours(blocks, operator_id)),
             search_url=self._page_url(params, city_id, country_id, operator_id),
             # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
             # отель неотличим от отсутствующего.
