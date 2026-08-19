@@ -452,3 +452,12 @@ def test_price_divergence_does_not_bury_hotel_gaps():
     assert scan.trustworthy
     assert scan.gaps_of(GapKind.PRICE) == []
     assert [g.hotel_name for g in scan.gaps_of(GapKind.HOTEL)] == ["Только у них"]
+
+
+def test_reference_link_survives_an_early_exit():
+    """Разбор выходит раньше на пустом эталоне, и такие прогоны оставались без ссылки —
+    хотя открыть витрину как раз и хочется, когда у оператора там пусто."""
+    ref = result("tourvisor", [])
+    ref.search_url = "https://tourvisor.ru/tours/turkey/moskva?ts_dosearch=1"
+    scan = detect(PARAMS, ref, result("sletat", [hotel("A", "1", "sletat")]))
+    assert scan.reference_url == ref.search_url

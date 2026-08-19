@@ -368,8 +368,6 @@ class TourvisorApiProvider:
                 operator_id is not None and _blocks_are_ours(blocks, operator_id)),
             param_mismatches=verify(params, offer_facts(blocks), ""),
             search_url=self._page_url(params, city_id, country_id, operator_id),
-            # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
-            # отель неотличим от отсутствующего.
             # Недогруженный отель неотличим от отсутствующего, поэтому обрезкой считается
             # и незавершённый поиск, и упёршийся в предел страниц: и там и там мы видели
             # не всю выдачу эталона, а её начало.

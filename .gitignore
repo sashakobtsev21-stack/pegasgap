@@ -23,3 +23,4 @@ reports/
 # Собранный фронт — артефакт сборки
 frontend/dist/
 frontend/node_modules/
+_scratch*

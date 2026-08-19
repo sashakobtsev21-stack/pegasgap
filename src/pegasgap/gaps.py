@@ -403,6 +403,10 @@ def detect(
         reference=reference, checked=checked,
         reference_status=ref_status, checked_status=chk_status,
         reference_hotels=len(ref_hotels),
+        # Ссылку ставим сразу, а не в конце: разбор выходит раньше на пустом эталоне и на
+        # несостоявшейся проверке, и такие прогоны оставались без ссылки — хотя открыть
+        # витрину как раз и хочется, когда у оператора там пусто.
+        reference_url=reference.search_url if reference else None,
     )
 
     # (1) Эталон не показал предложений — нечего требовать от проверяемой стороны.
@@ -499,5 +503,4 @@ def detect(
     result.matched_hotels = len(match.pairs)
     result.reference_hotels = len(ref_hotels)
     result.checked_hotels = len(chk_hotels)
-    result.reference_url = reference.search_url if reference else None
     return result
