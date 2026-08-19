@@ -383,6 +383,11 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
     def sse(payload: dict) -> str:
         return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
 
+    @app.post("/api/logs/clear")
+    async def logs_clear() -> dict:
+        """Очистить накопленный лог. На идущий обход не влияет."""
+        return {"cleared": bus.clear()}
+
     @app.get("/api/proxies")
     async def proxies_state() -> dict:
         """Сколько прокси в пуле и сколько сейчас годны. Адреса наружу не отдаём."""

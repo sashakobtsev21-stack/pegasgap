@@ -68,6 +68,17 @@ class EventBus:
     def history(self) -> list[dict]:
         return list(self._history)
 
+    def clear(self) -> int:
+        """Забыть накопленные события. Возвращает, сколько выбросили.
+
+        Нужно перед чистым прогоном: лог живёт в памяти процесса, и до сих пор очистить
+        его можно было только перезапуском сервера — то есть заодно погасив обход.
+        Подписчиков не трогаем: их очереди уже отданы, а новые события пойдут как обычно.
+        """
+        count = len(self._history)
+        self._history.clear()
+        return count
+
     def subscribe(self) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE)
         self._subscribers.add(queue)

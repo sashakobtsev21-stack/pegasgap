@@ -3,6 +3,7 @@ import { m } from "framer-motion";
 import { ScrollText, Wifi, WifiOff } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
+import { postJson } from "../lib/api.js";
 import { useEventStream } from "../lib/stream.js";
 
 /**
@@ -22,7 +23,7 @@ const LEVEL_TONE = {
 };
 
 export default function LogsPage() {
-  const { logs, connected } = useEventStream();
+  const { logs, connected, clearLogs } = useEventStream();
   const [follow, setFollow] = useState(true);
   const boxRef = useRef(null);
 
@@ -39,6 +40,14 @@ export default function LogsPage() {
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     setFollow(atBottom);
   };
+
+  async function clearLog() {
+    try {
+      await postJson("/api/logs/clear", {});
+    } finally {
+      clearLogs();
+    }
+  }
 
   return (
     <m.div variants={staggerContainer} initial="hidden" animate="show"
@@ -64,6 +73,15 @@ export default function LogsPage() {
               ↓ К последним
             </button>
           )}
+          {/* Лог живёт в памяти процесса, и до этой кнопки очистить его можно было
+              только перезапуском сервера — то есть заодно погасив обход. */}
+          <button
+            onClick={clearLog}
+            title="Забыть накопленные строки. На идущий обход не влияет"
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted hover:text-ink"
+          >
+            Очистить
+          </button>
         </div>
       </GlassCard>
 

@@ -63,5 +63,11 @@ export function useEventStream() {
     };
   }, []);
 
-  return { logs, findings, state, connected, clearFindings: () => setFindings([]) };
+  return {
+    logs, findings, state, connected,
+    clearFindings: () => setFindings([]),
+    // Своя копия событий на клиенте: очистка серверного буфера её не тронет, поэтому
+    // сбрасываем и здесь — иначе кнопка «Очистить» выглядела бы сломанной.
+    clearLogs: () => setLogs([]),
+  };
 }
