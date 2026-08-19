@@ -421,21 +421,36 @@ def finding_facets(conn: sqlite3.Connection, since: datetime) -> dict:
     }
 
 
-def failed_runs(conn: sqlite3.Connection, since: datetime,
-                limit: int = 200) -> list[sqlite3.Row]:
+# Фильтры отчёта, применимые к прогону целиком. Класс находки и причина сюда не входят:
+# у забракованного прогона находок в отчёте нет вовсе, и сузить его по ним нельзя.
+_RUN_FILTERS = {"operator": "operator", "departure_city": "departure_city",
+                "country": "destination_country", "search_mode": "search_mode"}
+
+
+def failed_runs(conn: sqlite3.Connection, since: datetime, limit: int = 200,
+                filters: dict | None = None) -> list[sqlite3.Row]:
     """Прогоны, которым нельзя верить, с причинами.
 
     Это диагностика инструмента, а не находки, но прятать её нельзя: без неё непонятно,
-    покрыто ли направление вообще. Раньше жила на «Истории» вместе со всем подряд.
+    покрыто ли направление вообще.
+
+    Фильтры отчёта применяются и здесь: иначе экран, сужённый до одного оператора,
+    показывал бы чужие неудачи и завышал дыру в покрытии выбранного среза.
     """
+    clauses, values = [], []
+    for key, column in _RUN_FILTERS.items():
+        value = (filters or {}).get(key)
+        if value:
+            clauses.append(f"AND {column} = ?")
+            values.append(value)
     return conn.execute(
-        """SELECT id, run_at, operator, departure_city, destination_country,
-                  search_mode, problems
-             FROM runs
-            WHERE run_at >= ? AND trustworthy = 0
-            ORDER BY run_at DESC
-            LIMIT ?""",
-        (since.isoformat(timespec="seconds"), limit),
+        f"""SELECT id, run_at, operator, departure_city, destination_country,
+                   search_mode, problems
+              FROM runs
+             WHERE run_at >= ? AND trustworthy = 0 {" ".join(clauses)}
+             ORDER BY run_at DESC
+             LIMIT ?""",
+        (since.isoformat(timespec="seconds"), *values, limit),
     ).fetchall()
 
 
@@ -463,9 +478,16 @@ def findings_summary(conn: sqlite3.Connection, since: datetime,
                    {_where(filters)[0]}""",
         (since.isoformat(timespec="seconds"), *_where(filters)[1]),
     ).fetchone()
+    run_clauses, run_values = [], []
+    for key, column in _RUN_FILTERS.items():
+        value = (filters or {}).get(key)
+        if value:
+            run_clauses.append(f"AND {column} = ?")
+            run_values.append(value)
     failed = conn.execute(
-        "SELECT COUNT(*) FROM runs WHERE run_at >= ? AND trustworthy = 0",
-        (since.isoformat(timespec="seconds"),)).fetchone()[0]
+        f"SELECT COUNT(*) FROM runs WHERE run_at >= ? AND trustworthy = 0 "
+        f"{' '.join(run_clauses)}",
+        (since.isoformat(timespec="seconds"), *run_values)).fetchone()[0]
     total = row["total"] or 0
     reviewed = row["reviewed"] or 0
     unique = row["unique_problems"] or 0

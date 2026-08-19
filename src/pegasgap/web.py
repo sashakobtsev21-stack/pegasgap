@@ -504,7 +504,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                                     min_times=min_times, filters=filters)
             summary = storage.findings_summary(conn, since, filters=filters)
             queue_stats = case_queue.stats(conn)
-            failed = storage.failed_runs(conn, since)
+            failed = storage.failed_runs(conn, since, filters=filters)
             facets = storage.finding_facets(conn, since)
         return {
             "summary": {**summary, "queue": queue_stats},

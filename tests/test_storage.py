@@ -159,3 +159,19 @@ def test_findings_come_back_oldest_first(conn):
     storage.save_scan(conn, scan([gap("Второй")]))
     names = [r["hotel_name"] for r in storage.findings(conn, datetime.now() - timedelta(days=1))]
     assert names == ["Первый", "Второй"]
+
+
+def test_failed_runs_respect_the_report_filters(conn):
+    """Экран, сужённый до одного оператора, не должен показывать чужие неудачи: иначе
+    дыра в покрытии выбранного среза выглядит больше, чем она есть."""
+    bad = scan([], trustworthy=False)
+    bad.operator = "Coral Travel"
+    storage.save_scan(conn, bad)
+    storage.save_scan(conn, scan([], trustworthy=False))      # Pegas по умолчанию
+    since = datetime.now() - timedelta(days=1)
+
+    assert len(storage.failed_runs(conn, since)) == 2
+    only = storage.failed_runs(conn, since, filters={"operator": "Coral Travel"})
+    assert [r["operator"] for r in only] == ["Coral Travel"]
+    assert storage.findings_summary(
+        conn, since, filters={"operator": "Coral Travel"})["failed_runs"] == 1
