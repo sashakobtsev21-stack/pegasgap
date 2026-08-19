@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS gaps (
     reviewed_at     TEXT
 );
 
+-- Разбор находки. Ключ — сама ПРОБЛЕМА (оператор + направление + отель + класс), а не
+-- строка выдачи. Строк у одной проблемы десятки: «LIFE RESORTS CORAL HILLS» встретился
+-- в 53 прогонах. Флаг на строке означал бы, что отметка живёт до следующей проверки —
+-- каждый новый прогон заводит свежие строки, и разобранное всплывало бы заново.
+CREATE TABLE IF NOT EXISTS gap_review (
+    problem_key TEXT PRIMARY KEY,
+    reviewed_at TEXT NOT NULL
+);
+
 -- Возраст находки: когда впервые увидели и сколько прогонов подряд она держится.
 CREATE TABLE IF NOT EXISTS gap_history (
     scenario_key TEXT    NOT NULL,
@@ -279,6 +288,31 @@ def gaps_of_run(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+# Как из строки отчёта получается ключ проблемы. Тот же состав, что у свода в отчёте,
+# иначе галка и группировка разошлись бы: отмечаешь одно, гаснет другое.
+_PROBLEM_KEY = ("r.operator || '|' || r.departure_city || '|' || r.destination_country "
+                "|| '|' || g.hotel_name || '|' || g.kind")
+
+
+def problem_key_of(conn: sqlite3.Connection, gap_id: int) -> str | None:
+    """Ключ проблемы, к которой относится строка отчёта."""
+    row = conn.execute(
+        f"SELECT {_PROBLEM_KEY} AS k FROM gaps g JOIN runs r ON r.id = g.run_id "
+        f"WHERE g.id = ?", (gap_id,)).fetchone()
+    return row["k"] if row else None
+
+
+def set_problem_reviewed(conn: sqlite3.Connection, key: str, reviewed: bool = True) -> None:
+    """Отметить проблему разобранной. Отметка переживает перепроверки направления."""
+    if reviewed:
+        conn.execute(
+            "INSERT INTO gap_review (problem_key, reviewed_at) VALUES (?, ?) "
+            "ON CONFLICT(problem_key) DO UPDATE SET reviewed_at = excluded.reviewed_at",
+            (key, datetime.now().isoformat(timespec="seconds")))
+    else:
+        conn.execute("DELETE FROM gap_review WHERE problem_key = ?", (key,))
+
+
 def set_reviewed(conn: sqlite3.Connection, gap_id: int, reviewed: bool = True) -> bool:
     """Отметить находку разобранной. False — такой находки нет."""
     cur = conn.execute(
@@ -334,19 +368,26 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
     """
     extra, extra_values = _where(filters)
     return conn.execute(
-        f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
+        f"""SELECT g.id, g.run_id, g.kind, g.hotel_name, g.stars, g.resort,
+                   g.reference_price, g.checked_price, g.currency, g.matched_name,
+                   g.note, g.diagnosis, g.catalog_id, g.catalog_name,
+                   g.reference_hotel_id, g.checked_checkin, g.checked_meal, g.checked_room,
+                   r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
                    r.search_mode, r.params_json, r.operator, r.reference_url,
-                   h.times_seen, h.first_seen
+                   h.times_seen, h.first_seen,
+                   (v.problem_key IS NOT NULL) AS reviewed,
+                   v.reviewed_at
               FROM gaps g
               JOIN runs r ON r.id = g.run_id
               LEFT JOIN gap_history h
                      ON h.scenario_key = r.scenario_key AND h.gap_key = g.gap_key
+              LEFT JOIN gap_review v ON v.problem_key = {_PROBLEM_KEY}
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    AND COALESCE(h.times_seen, 1) >= ?
-                   {"AND g.reviewed = 0" if only_open else ""}
+                   {"AND v.problem_key IS NULL" if only_open else ""}
                    {extra}
-             ORDER BY g.reviewed ASC, r.run_at DESC
+             ORDER BY reviewed ASC, r.run_at DESC
              LIMIT ?""",
         (since.isoformat(timespec="seconds"), max(1, min_times), *extra_values, limit),
     ).fetchall()
@@ -399,7 +440,7 @@ def findings_summary(conn: sqlite3.Connection, since: datetime,
     """Счётчики для шапки: сколько найдено и сколько из этого уже разобрано."""
     row = conn.execute(
         f"""SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN g.reviewed = 1 THEN 1 ELSE 0 END) AS reviewed,
+                   SUM(CASE WHEN v.problem_key IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
                    -- Уникальные проблемы: тот же отель у того же оператора на том же
                    -- направлении. Строк всегда во много раз больше — одна проверка
                    -- сравнивает сотню отелей, и каждый отсутствующий даёт строку, а
@@ -408,11 +449,12 @@ def findings_summary(conn: sqlite3.Connection, since: datetime,
                    COUNT(DISTINCT r.operator || '|' || r.departure_city || '|'
                                   || r.destination_country || '|' || g.hotel_name
                                   || '|' || g.kind) AS unique_problems,
-                   COUNT(DISTINCT CASE WHEN g.reviewed = 1 THEN
+                   COUNT(DISTINCT CASE WHEN v.problem_key IS NOT NULL THEN
                                   r.operator || '|' || r.departure_city || '|'
                                   || r.destination_country || '|' || g.hotel_name
                                   || '|' || g.kind END) AS unique_reviewed
               FROM gaps g JOIN runs r ON r.id = g.run_id
+              LEFT JOIN gap_review v ON v.problem_key = {_PROBLEM_KEY}
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    {_where(filters)[0]}""",
         (since.isoformat(timespec="seconds"), *_where(filters)[1]),

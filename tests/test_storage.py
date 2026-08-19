@@ -118,3 +118,33 @@ def test_report_hides_reverse_gaps_from_older_runs(conn):
     assert [r["hotel_name"] for r in storage.findings(conn, since)] == ["A Palace"]
     assert storage.findings_summary(conn, since)["total"] == 1
     assert len(storage.gaps_of_run(conn, run_id)) == 2
+
+
+def test_review_survives_a_recheck(conn):
+    """Отметка держится на ПРОБЛЕМЕ, а не на строке. Строк у одной проблемы десятки —
+    «LIFE RESORTS CORAL HILLS» встретился в 53 прогонах, — и флаг на строке означал бы,
+    что разобранное всплывает заново после каждой перепроверки направления."""
+    first = scan([gap("A Palace")])
+    storage.save_scan(conn, first)
+    since = datetime.now() - timedelta(days=1)
+
+    row = storage.findings(conn, since)[0]
+    storage.set_problem_reviewed(conn, storage.problem_key_of(conn, row["id"]))
+    assert storage.findings_summary(conn, since)["unique_reviewed"] == 1
+
+    # Направление перепроверили — появилась новая строка той же проблемы.
+    storage.save_scan(conn, scan([gap("A Palace")]))
+    summary = storage.findings_summary(conn, since)
+    assert summary["unique"] == 1
+    assert summary["unique_reviewed"] == 1        # осталась разобранной
+    assert all(r["reviewed"] for r in storage.findings(conn, since))
+
+
+def test_unreviewing_a_problem_brings_it_back(conn):
+    storage.save_scan(conn, scan([gap("A Palace")]))
+    since = datetime.now() - timedelta(days=1)
+    key = storage.problem_key_of(conn, storage.findings(conn, since)[0]["id"])
+    storage.set_problem_reviewed(conn, key)
+    storage.set_problem_reviewed(conn, key, reviewed=False)
+    assert storage.findings_summary(conn, since)["unique_reviewed"] == 0
+    assert len(storage.findings(conn, since, only_open=True)) == 1

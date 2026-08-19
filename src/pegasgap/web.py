@@ -581,10 +581,19 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
 
     @app.post("/api/findings/{gap_id}/review")
     async def review(gap_id: int, reviewed: bool = True) -> dict:
+        """Отметить разобранной ПРОБЛЕМУ, к которой относится строка.
+
+        Отметка ставится на проблему целиком (оператор + направление + отель + класс), а
+        не на строку: строк у одной проблемы десятки, они разбросаны по прогонам, и часть
+        из них в отчёт даже не загружена. Заодно отметка переживает перепроверку —
+        иначе следующий обход завёл бы свежие строки, и разобранное всплыло бы заново.
+        """
         with storage.session(db_path) as conn:
-            if not storage.set_reviewed(conn, gap_id, reviewed):
+            key = storage.problem_key_of(conn, gap_id)
+            if key is None:
                 raise HTTPException(404, f"находка #{gap_id} не найдена")
-        return {"id": gap_id, "reviewed": reviewed}
+            storage.set_problem_reviewed(conn, key, reviewed)
+        return {"id": gap_id, "problem": key, "reviewed": reviewed}
 
     # Собранный дашборд. Раздаём под /app, корень редиректит туда — чтобы у пользователя
     # был один адрес, который «просто открывается».

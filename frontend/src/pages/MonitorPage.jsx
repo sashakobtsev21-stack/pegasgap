@@ -74,8 +74,10 @@ export default function MonitorPage() {
       findings: prev.findings.map((f) => (ids.has(f.id) ? { ...f, reviewed: next } : f)),
     });
     try {
-      await Promise.all(group.items.map((f) =>
-        postJson(`/api/findings/${f.id}/review?reviewed=${next}`, {})));
+      // Один запрос на всю группу: сервер отмечает проблему, а не строки. Раньше здесь
+      // шёл запрос на каждую строку, и отмечались только загруженные — остальные
+      // (а их у проблемы бывает под полсотни) оставались неразобранными.
+      await postJson(`/api/findings/${group.head.id}/review?reviewed=${next}`, {});
     } catch {
       reload();
     }
