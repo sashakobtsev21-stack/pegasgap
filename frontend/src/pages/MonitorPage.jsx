@@ -37,11 +37,10 @@ export default function MonitorPage() {
   // счётчик показывал 1379 находок, а таблица молча обрывалась на пятистах — и это
   // читалось как «вот всё, что нашли». Порог поднимается кнопкой.
   const [limit, setLimit] = useState(500);
-  const [days, setDays] = useState(30);
-  // Порог устойчивости. Разовая находка чаще всего рябь выдачи; проблема, которая
-  // держится несколько прогонов подряд, — уже адрес для разбора. Раньше это жило
-  // отдельной вкладкой, то есть отдельно от решения, которое по нему принимают.
-  const [minTimes, setMinTimes] = useState(1);
+  // Период фиксированный: срез по нему в отчёте не нужен, а место в ряду фильтров
+  // занимал. Возраст находки при этом остаётся виден в строке — он и отделяет
+  // устойчивую проблему от разовой ряби.
+  const days = 30;
   const [showFailed, setShowFailed] = useState(false);
   // Срезы отчёта. Пустая строка — «все»; значения приходят из самих данных, а не из
   // конфига, иначе список предлагал бы фильтры, по которым отчёт пуст.
@@ -51,12 +50,10 @@ export default function MonitorPage() {
   const [open, setOpen] = useState(() => new Set());   // раскрытые группы
 
   const reload = useCallback(() => {
-    const q = new URLSearchParams({
-      days, only_open: onlyOpen, limit, min_times: minTimes, ...pick,
-    });
+    const q = new URLSearchParams({ days, only_open: onlyOpen, limit, ...pick });
     getJson(`/api/findings?${q}`).then(setStored).catch(() => {});
     getJson("/api/worker").then(setWorker).catch(() => {});
-  }, [onlyOpen, limit, days, minTimes, pick]);
+  }, [onlyOpen, limit, pick]);
 
   useEffect(reload, [reload]);
   // Новая находка в потоке — подтягиваем накопленное, чтобы у строки появился id и с ней
@@ -123,7 +120,7 @@ export default function MonitorPage() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Проверено кейсов" value={queue.checked ?? 0} of={queue.total} />
           <Stat label="Осталось в очереди" value={queue.pending ?? 0} />
-          <Stat label={`Проблем за ${days} дн.`} value={summary.unique ?? 0} tone="brand" />
+          <Stat label="Проблем за 30 дней" value={summary.unique ?? 0} tone="brand" />
           {/* Раньше рядом стояло «не разобрано», повторявшее предыдущую цифру один в
               один, пока никто ничего не отметил. Прогресс разбора полезнее: он растёт. */}
           <Stat label="Разобрано" value={summary.unique_reviewed ?? 0} of={summary.unique}
@@ -189,12 +186,6 @@ export default function MonitorPage() {
               : ` · ${stored.findings.length}`) : ""}
           </h2>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted">
-            <Pick label="период" value={String(days)} onChange={(v) => setDays(Number(v))}
-                  options={[1, 7, 30, 90].map((d) => [String(d), `${d} дн.`])} />
-            <Pick label="держится" value={String(minTimes)}
-                  onChange={(v) => setMinTimes(Number(v))}
-                  options={[["1", "любые"], ["2", "от 2 прогонов"],
-                            ["3", "от 3 прогонов"], ["5", "от 5 прогонов"]]} />
             <Pick label="оператор" value={pick.operator} allLabel="все"
                   onChange={(v) => setPick((p) => ({ ...p, operator: v }))}
                   options={(facets.operators || []).map((o) => [o, o])} />

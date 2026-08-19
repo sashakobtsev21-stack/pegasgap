@@ -199,7 +199,11 @@ export function Select({
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.14, ease: "easeOut" }}
-            style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width }}
+            // Ширина по триггеру, но не уже самого длинного пункта: иначе список режет
+            // собственные названия («есть в спр…», «нет в спра…») и выбирать приходится
+            // наугад по началу слова.
+            style={{ position: "absolute", top: pos.top, left: pos.left,
+                     width: pos.width, minWidth: "max-content" }}
             className="z-[60] overflow-hidden rounded-xl border border-white/10 bg-[#0b1026] p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.9)] ring-1 ring-black/40"
           >
             {searchable && (
