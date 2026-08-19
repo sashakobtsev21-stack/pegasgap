@@ -3,6 +3,7 @@ import { m } from "framer-motion";
 import { CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, Loader2, Radar,
   Wifi, WifiOff } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard.jsx";
+import { Select } from "../components/ui/Field.jsx";
 import { fadeUp, staggerContainer } from "../lib/animations.js";
 import { formatDate, formatShortDateTime } from "../lib/format.js";
 import { getJson, postJson } from "../lib/api.js";
@@ -42,14 +43,20 @@ export default function MonitorPage() {
   // отдельной вкладкой, то есть отдельно от решения, которое по нему принимают.
   const [minTimes, setMinTimes] = useState(1);
   const [showFailed, setShowFailed] = useState(false);
+  // Срезы отчёта. Пустая строка — «все»; значения приходят из самих данных, а не из
+  // конфига, иначе список предлагал бы фильтры, по которым отчёт пуст.
+  const [pick, setPick] = useState({
+    operator: "", departure_city: "", country: "", kind: "", diagnosis: "",
+  });
   const [open, setOpen] = useState(() => new Set());   // раскрытые группы
 
   const reload = useCallback(() => {
-    getJson(`/api/findings?days=${days}&only_open=${onlyOpen}&limit=${limit}`
-            + `&min_times=${minTimes}`)
-      .then(setStored).catch(() => {});
+    const q = new URLSearchParams({
+      days, only_open: onlyOpen, limit, min_times: minTimes, ...pick,
+    });
+    getJson(`/api/findings?${q}`).then(setStored).catch(() => {});
     getJson("/api/worker").then(setWorker).catch(() => {});
-  }, [onlyOpen, limit, days, minTimes]);
+  }, [onlyOpen, limit, days, minTimes, pick]);
 
   useEffect(reload, [reload]);
   // Новая находка в потоке — подтягиваем накопленное, чтобы у строки появился id и с ней
@@ -59,6 +66,7 @@ export default function MonitorPage() {
   const running = liveState?.running ?? worker?.running ?? false;
   const queue = worker?.queue || stored?.summary?.queue || {};
   const summary = stored?.summary || {};
+  const facets = stored?.facets || {};
 
   /** Отметить всю группу: одна проблема разбирается один раз, а не по разу на вариант. */
   async function toggleGroup(group) {
@@ -180,24 +188,29 @@ export default function MonitorPage() {
               ? ` · показано ${stored.findings.length} из ${summary.total}`
               : ` · ${stored.findings.length}`) : ""}
           </h2>
-          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted">
-            <label className="flex items-center gap-1.5">
-              период
-              <select value={days} onChange={(e) => setDays(Number(e.target.value))}
-                      className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-ink">
-                {[1, 7, 30, 90].map((d) => <option key={d} value={d}>{d} дн.</option>)}
-              </select>
-            </label>
-            <label className="flex items-center gap-1.5">
-              держится
-              <select value={minTimes} onChange={(e) => setMinTimes(Number(e.target.value))}
-                      className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-ink">
-                <option value={1}>любые</option>
-                <option value={2}>от 2 прогонов</option>
-                <option value={3}>от 3 прогонов</option>
-                <option value={5}>от 5 прогонов</option>
-              </select>
-            </label>
+          <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted">
+            <Pick label="период" value={String(days)} onChange={(v) => setDays(Number(v))}
+                  options={[1, 7, 30, 90].map((d) => [String(d), `${d} дн.`])} />
+            <Pick label="держится" value={String(minTimes)}
+                  onChange={(v) => setMinTimes(Number(v))}
+                  options={[["1", "любые"], ["2", "от 2 прогонов"],
+                            ["3", "от 3 прогонов"], ["5", "от 5 прогонов"]]} />
+            <Pick label="оператор" value={pick.operator} allLabel="все"
+                  onChange={(v) => setPick((p) => ({ ...p, operator: v }))}
+                  options={(facets.operators || []).map((o) => [o, o])} />
+            <Pick label="откуда" value={pick.departure_city} allLabel="все города"
+                  onChange={(v) => setPick((p) => ({ ...p, departure_city: v }))}
+                  options={(facets.departure_cities || []).map((o) => [o, o])} />
+            <Pick label="куда" value={pick.country} allLabel="все страны"
+                  onChange={(v) => setPick((p) => ({ ...p, country: v }))}
+                  options={(facets.countries || []).map((o) => [o, o])} />
+            <Pick label="класс" value={pick.kind} allLabel="все"
+                  onChange={(v) => setPick((p) => ({ ...p, kind: v }))}
+                  options={(facets.kinds || []).map((k) => [k, facets.kind_titles?.[k] || k])} />
+            <Pick label="причина" value={pick.diagnosis} allLabel="любая"
+                  onChange={(v) => setPick((p) => ({ ...p, diagnosis: v }))}
+                  options={(facets.diagnoses || [])
+                    .map((d) => [d, facets.diagnosis_titles?.[d] || d])} />
             <label className="flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
@@ -429,6 +442,25 @@ const paxLabel = (f) =>
   (f.params?.children_ages?.length
     ? ` + ${f.params.children_ages.length} реб. (${f.params.children_ages.join(", ")})`
     : "");
+
+
+/**
+ * Срез отчёта. Отдельным компонентом, потому что их семь и каждый — метка плюс список.
+ * Используем общий Select проекта: голый `<select>` в тёмной теме рисует пункты серым
+ * по белому, и выбранного варианта в списке не разглядеть.
+ */
+function Pick({ label, value, onChange, options, allLabel }) {
+  return (
+    <label className="flex items-center gap-1.5">
+      {label}
+      <Select value={value} onChange={(e) => onChange(e.target.value)}
+              className="min-w-[7rem]">
+        {allLabel ? <option value="">{allLabel}</option> : null}
+        {options.map(([v, title]) => <option key={v} value={v}>{title}</option>)}
+      </Select>
+    </label>
+  );
+}
 
 
 function Stat({ label, value, of, tone }) {

@@ -494,16 +494,26 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
 
     @app.get("/api/findings")
     async def findings(days: int = 7, only_open: bool = False, limit: int = 500,
-                       min_times: int = 1) -> dict:
+                       min_times: int = 1, operator: str = "", departure_city: str = "",
+                       country: str = "", kind: str = "", diagnosis: str = "") -> dict:
         since = datetime.now() - timedelta(days=max(1, days))
+        filters = {"operator": operator, "departure_city": departure_city,
+                   "country": country, "kind": kind, "diagnosis": diagnosis}
         with storage.session(db_path) as conn:
             rows = storage.findings(conn, since, only_open=only_open, limit=limit,
-                                    min_times=min_times)
-            summary = storage.findings_summary(conn, since)
+                                    min_times=min_times, filters=filters)
+            summary = storage.findings_summary(conn, since, filters=filters)
             queue_stats = case_queue.stats(conn)
             failed = storage.failed_runs(conn, since)
+            facets = storage.finding_facets(conn, since)
         return {
             "summary": {**summary, "queue": queue_stats},
+            # Списки для фильтров — только то, что реально есть в отчёте за период.
+            "facets": {
+                **facets,
+                "kind_titles": {k.value: k.title for k in GapKind},
+                "diagnosis_titles": {d.value: d.title for d in HotelDiagnosis},
+            },
             # Непроверенное — рядом с отчётом, а не на отдельной вкладке: без него не
             # видно, покрыто ли направление вообще.
             "failed": [

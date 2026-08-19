@@ -296,8 +296,33 @@ def set_reviewed(conn: sqlite3.Connection, gap_id: int, reviewed: bool = True) -
 _REPORTED_KINDS = "g.kind <> 'reverse'"
 
 
+# Поля, по которым отчёт можно сузить. Ключ — имя в запросе, значение — колонка.
+# Держим списком, чтобы фильтры добавлялись в одном месте и не расползались условиями
+# по всему запросу; значения подставляются параметрами, строки в SQL не склеиваются.
+_FILTERS = {
+    "operator": "r.operator",
+    "departure_city": "r.departure_city",
+    "country": "r.destination_country",
+    "kind": "g.kind",
+    "diagnosis": "g.diagnosis",
+    "search_mode": "r.search_mode",
+}
+
+
+def _where(filters: dict | None) -> tuple[str, list]:
+    """Условия и значения для выбранных фильтров. Пустые значения игнорируются."""
+    clauses, values = [], []
+    for key, column in _FILTERS.items():
+        value = (filters or {}).get(key)
+        if value:
+            clauses.append(f"AND {column} = ?")
+            values.append(value)
+    return " ".join(clauses), values
+
+
 def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
-             limit: int = 500, min_times: int = 1) -> list[sqlite3.Row]:
+             limit: int = 500, min_times: int = 1,
+             filters: dict | None = None) -> list[sqlite3.Row]:
     """Находки за период вместе с параметрами прогона — то, что показывает отчёт.
 
     Недостоверные прогоны исключены: их находки нельзя ни разбирать, ни считать.
@@ -307,6 +332,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
     разовой ряби выдачи, и раньше он жил на отдельной вкладке — то есть отдельно от
     решения, которое по нему принимают. `min_times` отсекает разовые.
     """
+    extra, extra_values = _where(filters)
     return conn.execute(
         f"""SELECT g.*, r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
@@ -319,10 +345,35 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
              WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
                    AND COALESCE(h.times_seen, 1) >= ?
                    {"AND g.reviewed = 0" if only_open else ""}
+                   {extra}
              ORDER BY g.reviewed ASC, r.run_at DESC
              LIMIT ?""",
-        (since.isoformat(timespec="seconds"), max(1, min_times), limit),
+        (since.isoformat(timespec="seconds"), max(1, min_times), *extra_values, limit),
     ).fetchall()
+
+
+def finding_facets(conn: sqlite3.Connection, since: datetime) -> dict:
+    """Что вообще есть в отчёте за период — значения для выпадающих списков.
+
+    Именно ЕСТЬ, а не «что заведено в конфиге»: список из конфига предлагал бы фильтры,
+    по которым отчёт пуст, и человек решал бы, что данные потерялись.
+    """
+    def distinct(column: str) -> list[str]:
+        rows = conn.execute(
+            f"""SELECT {column} AS v, COUNT(*) AS n
+                  FROM gaps g JOIN runs r ON r.id = g.run_id
+                 WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+                 GROUP BY 1 ORDER BY n DESC""",
+            (since.isoformat(timespec="seconds"),)).fetchall()
+        return [str(r["v"]) for r in rows if r["v"]]
+
+    return {
+        "operators": distinct("r.operator"),
+        "departure_cities": distinct("r.departure_city"),
+        "countries": distinct("r.destination_country"),
+        "kinds": distinct("g.kind"),
+        "diagnoses": distinct("g.diagnosis"),
+    }
 
 
 def failed_runs(conn: sqlite3.Connection, since: datetime,
@@ -343,7 +394,8 @@ def failed_runs(conn: sqlite3.Connection, since: datetime,
     ).fetchall()
 
 
-def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
+def findings_summary(conn: sqlite3.Connection, since: datetime,
+                     filters: dict | None = None) -> dict:
     """Счётчики для шапки: сколько найдено и сколько из этого уже разобрано."""
     row = conn.execute(
         f"""SELECT COUNT(*) AS total,
@@ -361,8 +413,9 @@ def findings_summary(conn: sqlite3.Connection, since: datetime) -> dict:
                                   || r.destination_country || '|' || g.hotel_name
                                   || '|' || g.kind END) AS unique_reviewed
               FROM gaps g JOIN runs r ON r.id = g.run_id
-             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}""",
-        (since.isoformat(timespec="seconds"),),
+             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+                   {_where(filters)[0]}""",
+        (since.isoformat(timespec="seconds"), *_where(filters)[1]),
     ).fetchone()
     failed = conn.execute(
         "SELECT COUNT(*) FROM runs WHERE run_at >= ? AND trustworthy = 0",
