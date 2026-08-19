@@ -52,6 +52,7 @@ from pegasgap.models import (
     SearchParams,
 )
 from pegasgap.names import operator_matches
+from pegasgap.paramcheck import OfferFacts, verify
 from pegasgap.providers.base import register_provider
 from pegasgap.proxies import is_blocked, pool
 
@@ -129,6 +130,33 @@ def _to_float(value: Any) -> float | None:
     except (ValueError, TypeError):
         return None
     return result or None
+
+
+def offer_facts(blocks: list[dict], operators: dict[int, str] | None = None
+                ) -> list[OfferFacts]:
+    """Что каждый тур выдачи говорит о себе: дата вылета, ночи, оператор.
+
+    Витрина кладёт это прямо в строку отеля (`tour[].dt`, `.nt`, `.op`), так что сверять
+    можно не эхо запроса, а свойства найденного.
+    """
+    operators = operators or {}
+    facts: list[OfferFacts] = []
+    for block in blocks:
+        for row in block.get("hotel") or []:
+            for tour in row.get("tour") or []:
+                facts.append(OfferFacts(
+                    checkin=_parse_day(tour.get("dt")),
+                    nights=_to_int(tour.get("nt")),
+                    operator=operators.get(_to_int(tour.get("op")) or -1),
+                ))
+    return facts
+
+
+def _parse_day(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
 
 
 def _blocks_are_ours(blocks: list[dict], operator_id: int) -> bool:
@@ -338,6 +366,7 @@ class TourvisorApiProvider:
             operators_no_tours=no_tours, operators_not_responding=not_responding,
             operator_filter_verified=(
                 operator_id is not None and _blocks_are_ours(blocks, operator_id)),
+            param_mismatches=verify(params, offer_facts(blocks), ""),
             search_url=self._page_url(params, city_id, country_id, operator_id),
             # Поиск, не дошедший до `finished`, отдаёт неполную выдачу — а недогруженный
             # отель неотличим от отсутствующего.

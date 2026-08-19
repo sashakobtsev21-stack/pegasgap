@@ -48,6 +48,7 @@ from pegasgap.models import (
     SearchParams,
 )
 from pegasgap.names import operator_matches
+from pegasgap.paramcheck import OfferFacts, verify
 from pegasgap.providers.base import register_provider
 from pegasgap.proxies import is_blocked, pool
 
@@ -196,6 +197,20 @@ def own_rows_share(rows: list[list], operator: str) -> float | None:
     return mine / total if total else None
 
 
+def offer_facts(rows: list[list]) -> list[OfferFacts]:
+    """Что каждая строка выдачи говорит о себе — для сверки с запросом."""
+    facts = []
+    for row in rows:
+        if not isinstance(row, list) or len(row) <= IDX_OPERATOR_NAME:
+            continue
+        facts.append(OfferFacts(
+            checkin=_parse_checkin(row[IDX_DATE_FROM]),
+            nights=_to_int(row[IDX_NIGHTS]),
+            operator=str(row[IDX_OPERATOR_NAME] or "") or None,
+        ))
+    return facts
+
+
 def build_hotel_offers(rows: list[list], operator: str) -> list[HotelOffer]:
     """Строки `aaData` → предложения по отелям указанного оператора, мин. цена на отель.
 
@@ -324,6 +339,9 @@ class SletatApiProvider:
         share = own_rows_share(rows, operator)
         filter_applied = operator_id is not None and (
             share is None or share >= MIN_OWN_ROWS_SHARE)
+        # Сверка запроса с тем, что вернулось: единственная прямая проверка того, что
+        # площадка искала именно наши параметры, а не свои значения по умолчанию.
+        mismatched = verify(params, offer_facts(rows), operator)
         if share is not None and share < MIN_OWN_ROWS_SHARE:
             log.warning("Слетать (шлюз): фильтр по оператору не сработал — строк «%s» "
                         "лишь %.0f%%", operator, share * 100)
@@ -345,6 +363,7 @@ class SletatApiProvider:
             # Фильтр применяет сервер (filter=1&f_to_id), а состав выдачи дополнительно
             # проверяется по имени оператора в каждой строке.
             operator_filter_verified=filter_applied,
+            param_mismatches=mismatched,
             truncated=truncated,
         )
 

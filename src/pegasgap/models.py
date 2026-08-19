@@ -217,6 +217,9 @@ class ProviderResult(BaseModel):
     operators_no_tours: list[str] = Field(default_factory=list)
     operators_not_responding: list[str] = Field(default_factory=list)
     operators_available: list[str] = Field(default_factory=list)
+    # Расхождения между тем, что просили, и тем, что вернулось (см. `paramcheck`).
+    # Непусто = площадка искала не то, и сравнивать выдачи нельзя.
+    param_mismatches: list[str] = Field(default_factory=list)
     error: str | None = None
     # Пояснение к состоявшемуся ответу — не ошибка. Например «оператор отключён на
     # направлении»: поиск не выполнялся, но это определённый факт, а не сбой.

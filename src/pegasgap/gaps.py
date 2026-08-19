@@ -169,6 +169,9 @@ def _collect_problems(
         role = _who(res, fallback)
         # Фильтр по оператору не подтвердился: карточки отелей не несут имени ТО, значит
         # цены в них — минимум по всем операторам, и любой вывод о пропусках будет ложным.
+        # Площадка искала не то, что просили: сравнивать такие выдачи нельзя вовсе.
+        for mismatch in res.param_mismatches:
+            problems.append(f"{role}: {mismatch}")
         if res.operator_filter_verified is False:
             problems.append(f"{role}: фильтр по оператору не применился — данные непригодны")
 
