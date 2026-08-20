@@ -184,7 +184,8 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 scan.run_at.isoformat(timespec="seconds"),
-                p.scenario_key(), scan.operator, p.search_mode, p.departure_city,
+                scan.scenario_key or p.scenario_key(), scan.operator,
+                p.search_mode, p.departure_city,
                 p.destination_country, p.date_from.isoformat(), p.date_to.isoformat(),
                 scan.reference_status.value, scan.checked_status.value,
                 scan.reference_hotels, scan.checked_hotels, scan.reference_url,
@@ -230,7 +231,8 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                    ON CONFLICT(scenario_key, gap_key) DO UPDATE SET
                        last_seen  = excluded.last_seen,
                        times_seen = times_seen + 1""",
-                [(p.scenario_key(), g.key(), stamp, stamp) for g in scan.gaps],
+                [(scan.scenario_key or p.scenario_key(), g.key(), stamp, stamp)
+                 for g in scan.gaps],
             )
     return run_id
 

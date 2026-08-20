@@ -147,10 +147,16 @@ async def _diagnose(scan: ScanResult) -> None:
 
 
 async def run_scan(params: SearchParams, operator: str, db_path: Path,
-                   headless: bool = True) -> tuple[int, ScanResult]:
-    """Прогнать одно направление, разобрать причины и сохранить. Возвращает (id, итог)."""
+                   headless: bool = True,
+                   scenario_key: str | None = None) -> tuple[int, ScanResult]:
+    """Прогнать одно направление, разобрать причины и сохранить. Возвращает (id, итог).
+
+    `scenario_key` — устойчивый ключ кейса очереди для истории возраста; без него
+    берётся параметрный (годится для точечных прогонов, где история не главное).
+    """
     results = await run_pair(params, headless=headless)
     scan = detect(params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
+    scan.scenario_key = scenario_key
     await _diagnose(scan)
     with storage.session(db_path) as conn:
         run_id = storage.save_scan(conn, scan)

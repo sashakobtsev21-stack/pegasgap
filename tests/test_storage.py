@@ -186,3 +186,30 @@ def test_failed_runs_respect_the_report_filters(conn):
     assert [r["operator"] for r in only] == ["Coral Travel"]
     assert storage.findings_summary(
         conn, since, filters={"operator": "Coral Travel"})["failed_runs"] == 1
+
+
+def test_history_accumulates_on_the_case_key_across_days(conn):
+    """Двойной дефект живого З6: в ключе истории не было оператора (отель, пропавший у
+    Coral и Sunmar разом, делил одну строку — «держится N» завышался), а календарные
+    даты в ключе обнуляли возраст ежесуточно. Ключ кейса очереди лечит оба."""
+    first = scan([gap("A Palace")], when=datetime(2026, 8, 20, 10))
+    first.scenario_key = "tours|Москва|Турция|+14d..7d|7|2+"
+    storage.save_scan(conn, first)
+    # Назавтра тот же кейс: календарные даты другие, ключ кейса тот же.
+    second = scan([gap("A Palace")], when=datetime(2026, 8, 21, 10))
+    second.params = second.params.model_copy(update={
+        "date_from": date(2026, 9, 4), "date_to": date(2026, 9, 11)})
+    second.scenario_key = "tours|Москва|Турция|+14d..7d|7|2+"
+    storage.save_scan(conn, second)
+    row = conn.execute("select times_seen from gap_history").fetchone()
+    assert row["times_seen"] == 2
+
+
+def test_operators_keep_separate_history(conn):
+    """Тот же отель, пропавший у двух операторов, — две проблемы с независимым возрастом."""
+    for op_key in ("...|Coral Travel", "...|Sunmar"):
+        s = scan([gap("Pickalbatros Palace")])
+        s.scenario_key = op_key
+        storage.save_scan(conn, s)
+    rows = conn.execute("select count(*) from gap_history").fetchone()[0]
+    assert rows == 2

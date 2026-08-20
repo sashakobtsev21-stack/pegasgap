@@ -107,11 +107,16 @@ class SearchParams(BaseModel):
         return self.adults + len(self.children_ages)
 
     def scenario_key(self) -> str:
-        """Стабильный ключ запроса — чтобы связывать один и тот же сценарий между прогонами."""
+        """Ключ запроса для связи прогонов. С оператором: без него один отель, пропавший
+        у двух ТО разом, делил одну строку истории возраста. Для обхода очереди этот
+        ключ подменяется ключом кейса (см. ScanResult.scenario_key) — там окно задано
+        смещением и не меняется от календарной даты."""
         kids = ",".join(str(a) for a in self.children_ages)
+        operator = self.operators[0] if self.operators else ""
         return (f"{self.search_mode}|{self.departure_city}|{self.destination_country}"
                 f"|{self.date_from:%Y-%m-%d}..{self.date_to:%Y-%m-%d}"
-                f"|{self.nights_min}-{self.nights_max}|{self.adults}+{kids}")
+                f"|{self.nights_min}-{self.nights_max}|{self.adults}+{kids}"
+                f"|{operator}")
 
 
 class Offer(BaseModel):
@@ -328,7 +333,7 @@ class GapKind(StrEnum):
             GapKind.HOTEL: "чаще всего нет линковки отеля или мислинк: отель не сопоставлен "
                            "с внутренним справочником",
             GapKind.PRICE: "наценка, состав тура (ночи/питание/номер) или курс валюты",
-            GapKind.REVERSE: "либо у витрины неполная программа, либо мы показываем то, чего на рынке уже нет — вторая версия хуже",
+            GapKind.REVERSE: "либо у Турвизора неполная программа, либо мы показываем то, чего на рынке уже нет — вторая версия хуже",
         }[self]
 
 
@@ -367,9 +372,9 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.LINKED_NO_OFFER: "линкован, тура нет",
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "есть в справочнике",
             HotelDiagnosis.UNCERTAIN: "не опознан",
-            HotelDiagnosis.REF_LISTED_NO_TOURS: "у витрины без туров",
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "заведён, туров нет",
             HotelDiagnosis.REF_MAYBE_NAMED: "возможно, другое имя",
-            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "нет в словаре витрины",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "нет в справочнике Турвизора",
             HotelDiagnosis.UNKNOWN: "не проверялось",
         }[self]
 
@@ -392,12 +397,12 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.UNCERTAIN: "возможно, отель у нас есть под другим названием",
             HotelDiagnosis.CATALOG_DISABLED: "отель выключен в справочнике Слетать — его не "
                                              "покажут, сколько бы туров ни было",
-            HotelDiagnosis.REF_LISTED_NO_TOURS: "в словаре витрины отель есть, но туров "
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "в справочнике Турвизора отель есть, но туров "
                                                 "на эти даты её поиск не возвращает",
-            HotelDiagnosis.REF_MAYBE_NAMED: "точного имени в словаре витрины нет, но есть "
+            HotelDiagnosis.REF_MAYBE_NAMED: "точного имени в справочнике Турвизора нет, но есть "
                                             "похожее — возможен другой матчинг названий",
-            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "витрина такого отеля не знает вовсе — "
-                                                  "его нет даже в её словаре",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "Турвизор такого отеля не знает вовсе — "
+                                                  "его нет даже в его справочнике",
             HotelDiagnosis.UNKNOWN: "причина не разобрана — не было доступа к справочникам",
         }[self]
 
@@ -414,10 +419,10 @@ class HotelDiagnosis(StrEnum):
                                       "под другим именем",
             HotelDiagnosis.CATALOG_DISABLED: "включить отель в справочнике либо подтвердить, "
                                              "что выключен намеренно",
-            HotelDiagnosis.REF_LISTED_NO_TOURS: "открыть ссылку на витрину — поиск прижат "
-                                                "к отелю; вопрос к наполнению витрины",
-            HotelDiagnosis.REF_MAYBE_NAMED: "сверить название с кандидатом из словаря витрины",
-            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "ничего: отеля на витрине нет, "
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "открыть ссылку на Турвизор — поиск прижат "
+                                                "к отелю; вопрос к наполнению Турвизора",
+            HotelDiagnosis.REF_MAYBE_NAMED: "сверить название с кандидатом из справочника Турвизора",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "ничего: отеля на Турвизоре нет, "
                                                   "преимущество на нашей стороне",
             HotelDiagnosis.UNKNOWN: "запустить с доступом к справочникам",
         }[self]
@@ -486,6 +491,12 @@ class ScanResult(BaseModel):
     run_at: datetime = Field(default_factory=datetime.now)
     reference: ProviderResult | None = None   # Турвизор — эталон
     checked: ProviderResult | None = None     # Слетать — проверяемая
+    # Устойчивый ключ сценария для истории возраста. Воркер кладёт сюда ключ кейса
+    # очереди (окно смещением + оператор). Ключ из одних параметров не годится дважды:
+    # календарные даты меняются ежесуточно (история обнулялась бы каждый день), а без
+    # оператора один отель, пропавший у Coral и Sunmar разом, делил одну строку истории
+    # и «держится N прогонов» завышался.
+    scenario_key: str | None = None
     reference_status: OperatorStatus = OperatorStatus.UNKNOWN
     checked_status: OperatorStatus = OperatorStatus.UNKNOWN
     gaps: list[HotelGap] = Field(default_factory=list)

@@ -156,7 +156,8 @@ class Worker:
         # Sunmar пройденными, а искался по ним всё тот же Pegas. Восемьсот шестнадцать
         # прогонов ушли в дубль, и два оператора из трёх не проверялись вовсе.
         params = case.to_params()
-        return await run_scan(params, params.operators[0], self.db_path)
+        return await run_scan(params, params.operators[0], self.db_path,
+                              scenario_key=case.case_key)
 
     def start(self) -> bool:
         """Запустить цикл. False — уже работает."""
