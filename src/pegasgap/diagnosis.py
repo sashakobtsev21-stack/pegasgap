@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from difflib import SequenceMatcher
 
 from pegasgap.catalog import CatalogHotel
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
-from pegasgap.matching import Confidence, compare, core
+from pegasgap.matching import Confidence, ascii_core, compare, core, tokens
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 log = logging.getLogger("pegasgap.diagnosis")
@@ -200,6 +201,21 @@ def reverse_index(their_hotels: dict[int, dict]) -> CatalogIndex:
     return CatalogIndex(hotels)
 
 
+def _plausible_candidate(gap: HotelGap, hotel: CatalogHotel) -> bool:
+    """Стоит ли шаткое совпадение показывать человеку как кандидата.
+
+    Матчер отдаёт WEAK и за осмысленное сходство, и за случайное вхождение трёх букв:
+    живой список предлагал «ABEL» для «Annabella Park» и один «ALA HOTEL» сразу четырём
+    отелям — такие кандидаты не помогают сверке, а хоронят доверие к колонке. Порог:
+    либо совпала хотя бы половина значимых слов, либо написания в общем алфавите близки.
+    """
+    ours, theirs = tokens(gap.hotel_name), tokens(hotel.name)
+    if ours and theirs and len(ours & theirs) / len(ours | theirs) >= 0.5:
+        return True
+    a, b = ascii_core(gap.hotel_name), ascii_core(hotel.name)
+    return bool(a and b) and SequenceMatcher(None, a, b).ratio() >= 0.6
+
+
 def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
     """Причина «отеля нет на Турвизоре» — по словарю самой витрины.
 
@@ -217,19 +233,28 @@ def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
     counts: dict[str, int] = defaultdict(int)
     for gap in targets:
         hotel, confidence = index.find(gap)
-        if hotel is None or confidence is Confidence.NONE:
-            gap.diagnosis = HotelDiagnosis.REF_NOT_IN_DICTIONARY
-            gap.note = "в словаре витрины ничего похожего — отель есть только у нас"
-        elif confidence.comparable:
+        reason = compare(gap_as_offer(gap), hotel.as_offer())[1] if hotel else ""
+        if hotel is not None and confidence.comparable:
             gap.diagnosis = HotelDiagnosis.REF_LISTED_NO_TOURS
             gap.reference_hotel_id = hotel.id
             gap.note = (f"у витрины заведён как «{hotel.name}» (id {hotel.id}), "
                         f"но туров на эти даты её поиск не вернул")
-        else:
+        elif hotel is not None and "звёзды" in reason:
+            # Имя совпало буквально, разошлась только звёздность — данные о звёздах у
+            # площадок расходятся сплошь и рядом, и это почти наверняка тот же отель.
+            gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED
+            gap.reference_hotel_id = hotel.id
+            gap.note = (f"у витрины это же имя — «{hotel.name}» (id {hotel.id}), "
+                        f"{reason.replace('названия совпали, ', '')}; "
+                        f"почти наверняка тот же отель, туров у него нет")
+        elif hotel is not None and _plausible_candidate(gap, hotel):
             gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED
             gap.reference_hotel_id = hotel.id
             gap.note = (f"возможно, у витрины это «{hotel.name}» (id {hotel.id}) — "
                         f"совпадение неуверенное, сверить название")
+        else:
+            gap.diagnosis = HotelDiagnosis.REF_NOT_IN_DICTIONARY
+            gap.note = "в словаре витрины ничего убедительно похожего — отель есть только у нас"
         counts[gap.diagnosis.value] += 1
     log.info("диагноз по %d обратным находкам: %s", len(targets), dict(counts))
 

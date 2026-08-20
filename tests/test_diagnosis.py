@@ -329,3 +329,39 @@ def test_shaky_candidate_is_offered_for_review():
     assert gap.diagnosis in (HotelDiagnosis.REF_MAYBE_NAMED,
                              HotelDiagnosis.REF_LISTED_NO_TOURS)
     assert gap.reference_hotel_id is not None
+
+
+def test_junk_containment_is_not_offered_as_a_candidate():
+    """Живой список предлагал «ABEL» для «Annabella Park» и один «ALA HOTEL» сразу
+    четырём отелям — случайное вхождение трёх букв не помогает сверке, а хоронит
+    доверие к колонке."""
+    junk = {1: {"name": "ALA HOTEL ADULTS ONLY", "stars": 4},
+            2: {"name": "ABEL", "stars": 3}}
+    scan = reverse_scan("Hotel SU & Aqualand")
+    diagnose_reverse(scan, reverse_index(junk))
+    assert scan.gaps[0].diagnosis is HotelDiagnosis.REF_NOT_IN_DICTIONARY
+    assert "убедительно" in scan.gaps[0].note
+
+
+def test_district_suffix_stays_a_candidate():
+    """«Erboy» против «ERBOY HOTEL SIRKECI» — стамбульская приписка района; это
+    осмысленный кандидат, и его сверка стоит времени."""
+    their = {7: {"name": "ERBOY HOTEL SIRKECI", "stars": 3}}
+    scan = reverse_scan("Erboy")
+    diagnose_reverse(scan, reverse_index(their))
+    gap = scan.gaps[0]
+    assert gap.diagnosis is HotelDiagnosis.REF_MAYBE_NAMED
+    assert gap.reference_hotel_id == 7
+
+
+def test_same_name_different_stars_says_exactly_that():
+    """«Aqua Fantasy» один в один с обеих сторон, разошлась только звёздность — данные
+    о звёздах у площадок расходятся сплошь и рядом, и это почти наверняка тот же отель."""
+    their = {9: {"name": "AQUA FANTASY AQUAPARK HOTEL & SPA", "stars": 3}}
+    g = HotelGap(kind=GapKind.REVERSE, hotel_name="Aqua Fantasy Aquapark Hotel & Spa",
+                 stars=5, checked_price=Decimal("100000"))
+    scan = scan_with([g])
+    diagnose_reverse(scan, reverse_index(their))
+    assert g.diagnosis is HotelDiagnosis.REF_MAYBE_NAMED
+    assert "звёзды" in g.note and "тот же отель" in g.note
+    assert g.reference_hotel_id == 9
