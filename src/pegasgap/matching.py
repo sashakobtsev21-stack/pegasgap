@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import StrEnum
 
+from pegasgap import aliases
 from pegasgap.models import HotelOffer
 
 # Слова, не несущие различительной силы: они то есть, то нет, и по ним нельзя отличить
@@ -135,6 +136,42 @@ def _same_resort(a: HotelOffer, b: HotelOffer) -> bool:
     if not ra or not rb:
         return False
     return ra == rb or ra in rb or rb in ra
+
+
+# --- Словарь синонимов ---------------------------------------------------------------
+#
+# Подтверждённые вручную пары из `hotel_aliases.yaml` (см. aliases.py). Словарь сильнее
+# любого правила: человек уже сверил, что это один отель, и разводить такую пару по
+# звёздам или короткому ядру значило бы спорить с проверенным фактом.
+_ALIAS_STAMP: float | None = None
+_ALIAS_GROUPS: dict[str, int] = {}
+
+
+def refresh_aliases() -> None:
+    """Перестроить таблицу синонимов, если файл менялся.
+
+    Вызывается на входах — сопоставлении выдач и построении индекса справочника, — а не
+    в `compare`: сравнение зовётся миллионы раз за прогон, и stat файла там был бы
+    заметен. Ядра считаются здесь же, тем же `core`, что и всё сравнение.
+    """
+    global _ALIAS_STAMP, _ALIAS_GROUPS
+    groups = aliases.raw_groups()
+    stamp = id(groups)
+    if stamp == _ALIAS_STAMP:
+        return
+    table: dict[str, int] = {}
+    for number, group in enumerate(groups):
+        for name in group:
+            for key in cores(name):
+                table[key] = number
+    _ALIAS_STAMP, _ALIAS_GROUPS = stamp, table
+
+
+def _same_alias_group(a: str, b: str) -> bool:
+    ga = {_ALIAS_GROUPS[k] for k in cores(a) if k in _ALIAS_GROUPS}
+    if not ga:
+        return False
+    return any(_ALIAS_GROUPS.get(k) in ga for k in cores(b))
 
 
 class Confidence(StrEnum):
@@ -305,6 +342,10 @@ _ORDER = {Confidence.NONE: 0, Confidence.WEAK: 1, Confidence.STRONG: 2, Confiden
 
 def compare(a: HotelOffer, b: HotelOffer) -> tuple[Confidence, str]:
     """Насколько уверенно два предложения относятся к одному отелю."""
+    # Сверенные вручную пары — раньше всех правил и мимо вето по звёздам: человек уже
+    # подтвердил, что это один отель, а звёздность у площадок расходится сплошь и рядом.
+    if _same_alias_group(a.hotel_name, b.hotel_name):
+        return Confidence.EXACT, "подтверждено словарём синонимов"
     cores_a, cores_b = cores(a.hotel_name), cores(b.hotel_name)
     if not cores_a or not cores_b:
         return Confidence.NONE, "пустое название после нормализации"
@@ -378,6 +419,7 @@ def match_hotels(reference: list[HotelOffer], checked: list[HotelOffer]) -> Matc
     который точно подходит другому. Один отель проверяемой площадки используется один раз,
     поэтому остаток честно означает «пары не нашлось».
     """
+    refresh_aliases()
     result = MatchResult()
     free = list(checked)
     pending = list(reference)

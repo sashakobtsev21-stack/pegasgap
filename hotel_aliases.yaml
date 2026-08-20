@@ -1,0 +1,31 @@
+# Словарь синонимов названий отелей — подтверждённые вручную пары.
+#
+# Сюда попадает то, что человек СВЕРИЛ по колонке «возможно, другое имя»: одна строка —
+# одна группа написаний одного отеля (можно больше двух). Словарь сильнее любого правила
+# матчинга и снимает вето по звёздам, поэтому ошибка здесь молча склеит два разных отеля
+# — добавляйте только проверенное.
+#
+# Файл перечитывается по mtime: правка применяется со следующего прогона, без
+# перезапуска. Путь переопределяется переменной PEGASGAP_HOTEL_ALIASES.
+
+# Стамбульские приписки района: у витрины район в имени, у нас нет.
+- [Erboy, ERBOY HOTEL SIRKECI]
+- [Kecik, KECIK HOTEL LALELI]
+- [Zagreb Hotel, ZAGREB HOTEL LALELI]
+- [Daphne, DAPHNE HOTEL SULTANAHMET]
+
+# Порядок слов и город/курорт в имени.
+- [Sirkeci Ersu Hotel, ERSU HOTEL SIRKECI]
+- [Azure Villas By Cornelia, CORNELIA AZURE VILLAS]
+- [Amon Hotels Belek, AMON HOTELS]
+- [Inntel Hotel, INNTEL HOTEL ISTANBUL]
+- [Malkoc Hotel, BURSA MALKOC]
+
+# Приписка «adults only» у витрины.
+- [Day One Beach Resort & SPA, DAY ONE BEACH RESORT & SPA ADULT ONLY 18+]
+
+# Имя один в один, площадки разошлись только в звёздности — запись снимает вето по
+# звёздам, которое разводило эти пары по корзинам.
+- [Aqua Fantasy Aquapark Hotel & Spa, AQUA FANTASY AQUAPARK HOTEL & SPA]
+- [Armas Green Fugla Beach, ARMAS GREEN FUGLA BEACH]
+- [Gypsophila Club Marine, GYPSOPHILA CLUB MARINE]

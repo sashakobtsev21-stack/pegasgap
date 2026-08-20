@@ -21,7 +21,7 @@ from difflib import SequenceMatcher
 from pegasgap.catalog import CatalogHotel
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
-from pegasgap.matching import Confidence, ascii_core, compare, core, tokens
+from pegasgap.matching import Confidence, ascii_core, compare, core, refresh_aliases, tokens
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 log = logging.getLogger("pegasgap.diagnosis")
@@ -36,6 +36,7 @@ class CatalogIndex:
     """
 
     def __init__(self, hotels: list[CatalogHotel]) -> None:
+        refresh_aliases()
         self.hotels = hotels
         self._by_core: dict[str, list[CatalogHotel]] = defaultdict(list)
         for hotel in hotels:
