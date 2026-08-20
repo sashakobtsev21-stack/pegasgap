@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS gaps (
     checked_checkin TEXT,
     checked_meal    TEXT,
     checked_room    TEXT,
+    reference_room  TEXT,
     -- Триаж: находку кто-то посмотрел и закрыл вопрос. Отдельно от самой находки,
     -- потому что это состояние РАЗБОРА, а не результата проверки: перепроверка
     -- направления не должна сбрасывать то, что человек уже отсмотрел.
@@ -125,6 +126,7 @@ _MIGRATIONS = {
         "checked_checkin": "TEXT",
         "checked_meal": "TEXT",
         "checked_room": "TEXT",
+        "reference_room": "TEXT",
     },
     # Оператор стал измерением кейса. Прежние кейсы все были по Pegas — значение по
     # умолчанию проставляет им его же, поэтому история проверок переживает обновление.
@@ -202,8 +204,9 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                    run_id, gap_key, kind, hotel_name, stars, resort,
                    reference_price, checked_price, currency, matched_name, note,
                    diagnosis, catalog_id, catalog_name, reference_hotel_id,
-                   reference_checkin, checked_checkin, checked_meal, checked_room)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   reference_checkin, checked_checkin, checked_meal, checked_room,
+                   reference_room)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (run_id, g.key(), g.kind.value, g.hotel_name, g.stars, g.resort,
                  str(g.reference_price) if g.reference_price is not None else None,
@@ -212,7 +215,7 @@ def save_scan(conn: sqlite3.Connection, scan: ScanResult) -> int:
                  g.diagnosis.value, g.catalog_id, g.catalog_name, g.reference_hotel_id,
                  g.reference_checkin.isoformat() if g.reference_checkin else None,
                  g.checked_checkin.isoformat() if g.checked_checkin else None,
-                 g.checked_meal, g.checked_room)
+                 g.checked_meal, g.checked_room, g.reference_room)
                 for g in scan.gaps
             ],
         )
@@ -390,7 +393,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
                    g.reference_price, g.checked_price, g.currency, g.matched_name,
                    g.note, g.diagnosis, g.catalog_id, g.catalog_name,
                    g.reference_hotel_id, g.reference_checkin, g.checked_checkin,
-                   g.checked_meal, g.checked_room,
+                   g.checked_meal, g.checked_room, g.reference_room,
                    r.run_at, r.departure_city, r.destination_country,
                    r.date_from AS run_date_from, r.date_to AS run_date_to,
                    r.search_mode, r.params_json, r.operator, r.reference_url,

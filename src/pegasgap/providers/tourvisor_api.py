@@ -43,7 +43,9 @@ from urllib.parse import urlencode
 
 import httpx
 
+from pegasgap.basis import add_day_offer, normalize_meal
 from pegasgap.models import (
+    DayOffer,
     HotelOffer,
     NotApplicableError,
     Offer,
@@ -61,6 +63,9 @@ log = logging.getLogger("pegasgap.providers.tourvisor_api")
 LIST_URL = "https://tourvisor.ru/xml/listdev.php"
 SEARCH_URL = "https://tourvisor.ru/xml/modsearch.php"
 RESULT_URL = "https://search3.tourvisor.ru/modresult.php"
+# Карточка конкретного тура. Единственное место, где витрина называет номер словами:
+# в поисковой выдаче есть лишь внутренний id (`rm`), и словаря к нему нет.
+ACTUALIZE_URL = "https://tourvisor.ru/xml/actualize.php"
 
 # Предохранитель на число страниц, а не норма выработки: сбор всё равно останавливается,
 # как только очередная страница не приносит новых отелей. На малых направлениях предел не
@@ -210,7 +215,8 @@ def _hotel_codes(blocks: list[dict]) -> set[int]:
 
 def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
                        operator_id: int | None,
-                       regions: dict[int, str] | None = None) -> list[HotelOffer]:
+                       regions: dict[int, str] | None = None,
+                       meals: dict[int, str] | None = None) -> list[HotelOffer]:
     """Блоки выдачи + словарь отелей → предложения по отелям, мин. цена на отель.
 
     Отель, которого нет в словаре, пропускаем: без имени его не с чем сопоставлять, а
@@ -218,6 +224,7 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
     отсутствующий на другой стороне.
     """
     regions = regions or {}
+    meals = meals or {}
     best: dict[str, HotelOffer] = {}
     for block in blocks:
         if operator_id is not None and _to_decimal(block.get("operator")) != operator_id:
@@ -242,7 +249,7 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
                 # 16%», но не видно, что минимумы площадок пришлись на разные даты, — а
                 # это первое объяснение расхождения, которое надо исключить.
                 checkin=_cheapest_checkin(row),
-                prices_by_date=_prices_by_date(row),
+                day_offers=_day_offers(row, meals),
             )
             seen = best.get(name)
             if seen is None or offer.price < seen.price:
@@ -250,21 +257,16 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
     return sorted(best.values(), key=lambda h: h.price)
 
 
-def _prices_by_date(row: dict) -> dict[date, Decimal]:
-    """Минимальная цена отеля по каждому заезду.
-
-    Витрина кладёт в отель список туров, у каждого своя дата (`dt`) и цена (`pr`). Разрез
-    по датам нужен, чтобы сравнивать площадки на ОДНУ дату: минимум по всему окну каждая
-    сторона выбирает сама, и он сплошь и рядом приходится на разные дни.
-    """
-    out: dict[date, Decimal] = {}
+def _day_offers(row: dict, meal_names: dict[int, str]) -> dict[date, list[DayOffer]]:
+    """Предложения отеля в разрезе «заезд × питание». Номера в поиске витрина не отдаёт
+    (только внутренний id), поэтому room остаётся пустым, а `tour_id` сохраняется — по
+    нему имя номера достаётся точечно через actualize, когда находка уже есть."""
+    out: dict[date, list[DayOffer]] = {}
     for tour in row.get("tour") or []:
-        price, day = _to_decimal(tour.get("pr")), _parse_day(tour.get("dt"))
-        if price is None or day is None or price <= 0:
-            continue
-        known = out.get(day)
-        if known is None or price < known:
-            out[day] = price
+        add_day_offer(
+            out, _parse_day(tour.get("dt")), _to_decimal(tour.get("pr")),
+            normalize_meal(meal_names.get(_to_int(tour.get("ml")) or -1)),
+            None, str(tour.get("id") or "") or None)
     return out
 
 
@@ -390,6 +392,7 @@ class TourvisorApiProvider:
                     client, request_id, self._referrer(params))
                 hotels = await self._hotels(client, country_id)
                 regions = _region_names(lists)
+                meals = _meal_names(lists)
         except NotApplicableError as exc:
             return self._fail(params, start, str(exc))
         except httpx.HTTPError as exc:
@@ -407,7 +410,7 @@ class TourvisorApiProvider:
         if operator:
             offers = [o for o in offers if operator_matches(o.operator, operator)]
             no_tours = [n for n in no_tours if operator_matches(n, operator)]
-        hotel_offers = build_hotel_offers(blocks, hotels, operator_id, regions)
+        hotel_offers = build_hotel_offers(blocks, hotels, operator_id, regions, meals)
         operator_offers = [
             OperatorOffer(provider=self.name, operator=o.operator, price=o.price,
                           hotel_name=hotel_offers[0].hotel_name if hotel_offers else None)
@@ -465,7 +468,7 @@ class TourvisorApiProvider:
     async def _reference(self, client: httpx.AsyncClient) -> dict:
         if "lists" not in _LIST_CACHE:
             body = await self._get(client, LIST_URL, format="json", formmode="0",
-                                   type="departure,allcountry,operator")
+                                   type="departure,allcountry,operator,meal")
             _LIST_CACHE["lists"] = body.get("lists") or {}
         return _LIST_CACHE["lists"]
 
@@ -652,6 +655,41 @@ def _items(lists: dict, group: str, key: str) -> list[dict]:
     if isinstance(node, dict):
         node = node.get(key)
     return [i for i in (node or []) if isinstance(i, dict)]
+
+
+async def fetch_tour_room(tour_id: str | None) -> str | None:
+    """Название номера конкретного тура («стандарт 2 местный») — через actualize.
+
+    Вызывается точечно, по одной находке: находок единицы на прогон, а ответ приходит
+    из кеша поиска мгновенно. None означает «не удалось узнать», и вызывающий обязан
+    переживать его молча: сверка номера — уточнение находки, а не условие её появления.
+    """
+    if not tour_id:
+        return None
+    proxy = pool().acquire()
+    try:
+        async with httpx.AsyncClient(
+                timeout=30, proxy=proxy.url if proxy else None,
+                headers={"Referer": REFERER, "User-Agent": DESKTOP_UA}) as client:
+            response = await client.get(ACTUALIZE_URL, params={
+                "format": "json", "tourid": tour_id, "request": 0,
+                "referrer": REFERRER_TOURS})
+            response.raise_for_status()
+            tour = (response.json().get("data") or {}).get("tour") or {}
+            return str(tour.get("room") or "").strip() or None
+    except Exception as exc:  # сеть, бан, не-JSON — причина не важна, важна честность
+        log.warning("actualize: номер тура %s не получен (%s)", tour_id, type(exc).__name__)
+        return None
+
+
+def _meal_names(lists: dict) -> dict[int, str]:
+    """id питания → его код («RO», «BB», …) из словаря витрины. Туры несут только id."""
+    out: dict[int, str] = {}
+    for item in _items(lists, "meals", "meal"):
+        mid = _to_int(item.get("id"))
+        if mid is not None and item.get("name"):
+            out[mid] = str(item["name"])
+    return out
 
 
 def _region_names(lists: dict) -> dict[int, str]:

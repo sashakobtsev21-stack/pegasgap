@@ -16,11 +16,11 @@ from __future__ import annotations
 import os
 import statistics
 from datetime import date
-from decimal import Decimal
 
 from pegasgap.matching import MatchResult, match_hotels
 from pegasgap.models import (
     PEGAS,
+    DayOffer,
     GapKind,
     HotelGap,
     HotelOffer,
@@ -256,23 +256,33 @@ def _as_int(value: str | None) -> int | None:
         return None
 
 
-def _same_day_prices(m) -> tuple[date, Decimal, Decimal] | None:
-    """Заезд, на котором цены сравнимы, и обе цены на него. None — сравнивать нечего.
+def _same_basis_prices(m) -> tuple[date, str, DayOffer, DayOffer] | None:
+    """Общий состав, на котором цены сравнимы: (заезд, питание, у витрины, у нас).
 
-    Раньше сравнивались два минимума по окну, взятые сторонами независимо. Они сплошь и
-    рядом приходятся на разные дни: живой отчёт показывал «на Слетать дороже на 9.9%» при
-    заездах 06.09 у нас и 08.09 у витрины — то есть измерялась разница дат, а не площадок.
-    Предупреждение об этом стояло почти на каждой строке, что и означало: сравнение
-    негодное, а не требующее оговорки.
+    Сначала сравнение прижали к общему заезду — и «на Слетать дороже на 9.9%» перестало
+    измерять разницу дат. Но на одной дате всё ещё сравнивались минимумы РАЗНОГО состава:
+    AI против RO дороже на треть безо всякой разницы площадок. Поэтому пара цен обязана
+    совпадать и по заезду, и по базовому коду питания.
 
-    Берём самый дешёвый ОБЩИЙ заезд по стороне витрины: это предложение, которое человек
-    увидит первым, открыв обе ссылки, и по нему расхождение проверяется глазами.
+    Из сравнимых составов берётся самый дешёвый по стороне витрины: это предложение,
+    которое человек увидит первым, открыв обе ссылки, и по нему расхождение проверяется
+    глазами. Предложения с нераспознанным питанием не участвуют — молчание честнее
+    сравнения вслепую.
     """
-    common = set(m.reference.prices_by_date) & set(m.checked.prices_by_date)
-    if not common:
-        return None
-    day = min(common, key=lambda d: m.reference.prices_by_date[d])
-    return day, m.reference.prices_by_date[day], m.checked.prices_by_date[day]
+    best: tuple[date, str, DayOffer, DayOffer] | None = None
+    for day in set(m.reference.day_offers) & set(m.checked.day_offers):
+        ours_by_meal: dict[str, DayOffer] = {}
+        for offer in m.checked.day_offers[day]:
+            if offer.meal and (offer.meal not in ours_by_meal
+                               or offer.price < ours_by_meal[offer.meal].price):
+                ours_by_meal[offer.meal] = offer
+        for ref in m.reference.day_offers[day]:
+            ours = ours_by_meal.get(ref.meal or "")
+            if ours is None:
+                continue
+            if best is None or ref.price < best[2].price:
+                best = (day, ref.meal or "", ref, ours)
+    return best
 
 
 def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap], float | None]:
@@ -288,8 +298,9 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
     совпадением цены — формально они дальше всех от медианы, а по сути ничем не
     примечательны.
     """
-    comparable = [(m, same) for m in match.pairs if (same := _same_day_prices(m))]
-    diffs = [float((chk - ref) / ref * 100) for _, (_, ref, chk) in comparable if ref]
+    comparable = [(m, same) for m in match.pairs if (same := _same_basis_prices(m))]
+    diffs = [float((ours.price - ref.price) / ref.price * 100)
+             for _, (_, _, ref, ours) in comparable if ref.price]
     if not diffs:
         return [], None
     offset = statistics.median(diffs)
@@ -307,10 +318,10 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
         band = max(tolerance_pct, MAD_MULTIPLIER * mad)
 
     out: list[HotelGap] = []
-    for m, (day, ref_price, chk_price) in comparable:
-        if not ref_price:
+    for m, (day, meal, ref, ours) in comparable:
+        if not ref.price:
             continue
-        diff = float((chk_price - ref_price) / ref_price * 100)
+        diff = float((ours.price - ref.price) / ref.price * 100)
         deviation = diff - offset
         if abs(deviation) <= band:
             continue
@@ -319,8 +330,8 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             hotel_name=m.reference.hotel_name,
             stars=m.reference.stars or m.checked.stars,
             resort=m.reference.destination,
-            reference_price=ref_price,
-            checked_price=chk_price,
+            reference_price=ref.price,
+            checked_price=ours.price,
             currency=m.reference.currency,
             matched_name=m.checked.hotel_name,
             # Идентификатор отеля в нашем каталоге приходит в самой выдаче. Он нужен
@@ -331,8 +342,11 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             # Обе даты — один и тот же заезд: сравнение по определению одинодневное.
             reference_checkin=day,
             checked_checkin=day,
-            checked_meal=m.checked.meal,
-            checked_room=m.checked.room,
+            # Питание — общий знаменатель сравнения, номер — нашей стороны; номер
+            # витрины появится после точечной сверки (см. roomcheck).
+            checked_meal=meal,
+            checked_room=ours.room,
+            reference_tour_id=ref.tour_id,
             note=(f"разница {diff:+.1f}% при обычной для прогона {offset:+.1f}% "
                   f"(±{band:.1f}) — отклонение {deviation:+.1f}%"),
         ))

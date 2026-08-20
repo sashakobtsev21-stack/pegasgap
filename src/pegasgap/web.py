@@ -43,6 +43,7 @@ from pegasgap.models import (
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.pluginlog import fetch_causes
 from pegasgap.proxies import pool, reload_pool
+from pegasgap.roomcheck import pin_rooms
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 from pegasgap.searchlink import search_url_from_row
 from pegasgap.worker import Worker
@@ -114,6 +115,9 @@ class SweepState:
 
 async def _diagnose(scan: ScanResult) -> None:
     """Разобрать причины отельных пропусков. Недоступность справочников не фатальна."""
+    # Номера ценовых находок сверяются с витриной ДО раннего выхода: прогону с одними
+    # ценовыми находками отельный разбор не нужен, а сверка номеров — нужна.
+    await pin_rooms(scan)
     if not scan.gaps_of(GapKind.HOTEL):
         return
     country_id = await resolve_country_id(scan.params.destination_country)
@@ -569,6 +573,7 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     "checked_checkin": r["checked_checkin"],
                     "checked_meal": r["checked_meal"],
                     "checked_room": r["checked_room"],
+                    "reference_room": r["reference_room"],
                     "kind": r["kind"],
                     "kind_title": GapKind(r["kind"]).title,
                     "hotel_name": r["hotel_name"], "stars": r["stars"],

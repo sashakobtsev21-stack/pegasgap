@@ -79,12 +79,24 @@ describe("MonitorPage", () => {
     expect(screen.getByText(/10 ноч\./)).toBeTruthy();
   });
 
-  it("показывает заезд, на котором сравнивались цены", async () => {
+  it("показывает основу сравнения и честно говорит о несверенном номере", async () => {
     response = payload([finding({
       reference_checkin: "2026-09-19", checked_checkin: "2026-09-19",
+      checked_meal: "BB", checked_room: "Стандартный номер",
     })]);
     render(<MonitorPage />);
-    expect(await screen.findByText(/заезд 19\.09\.2026/)).toBeTruthy();
+    expect(await screen.findByText(/заезд 19\.09\.2026 · BB/)).toBeTruthy();
+    expect(screen.getByText(/номер витрины не сверен/)).toBeTruthy();
+  });
+
+  it("показывает сверенный номер витрины", async () => {
+    response = payload([finding({
+      reference_checkin: "2026-09-19", checked_checkin: "2026-09-19",
+      checked_meal: "RO", checked_room: "Стандартный номер",
+      reference_room: "стандарт 2 местный",
+    })]);
+    render(<MonitorPage />);
+    expect(await screen.findByText(/«Стандартный номер» ≈ «стандарт 2 местный»/)).toBeTruthy();
   });
 
   it("называет Турвизор, когда дороже он", async () => {

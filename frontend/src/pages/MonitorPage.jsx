@@ -425,31 +425,29 @@ function Prices({ f }) {
           {diff.toFixed(1)}%)
         </div>
       )}
-      {/* Заезд, на котором сравнивались цены. Он один на обе стороны — иначе измерялась
-          бы разница дат, а не площадок. */}
-      <Checkin f={f} />
+      {/* Основа сравнения: заезд и питание общие, номер сверяется с карточкой тура. */}
+      <Basis f={f} />
     </div>
   );
 }
 
 /**
- * На какой заезд сравнивались цены. Он ОДИН на обе стороны: сравнение по разным датам
- * мерило бы разницу дат, а не площадок, поэтому пары без общего заезда в находки не
- * попадают вовсе.
- *
- * Питание и номер — с нашей стороны и совпадения не гарантируют: одинаковая дата ещё не
- * значит одинаковый номер. Поэтому они идут справочно, а не как часть утверждения.
+ * Основа, на которой сравнивались цены: общий заезд, общее питание, номера сторон.
+ * Питание идёт без пометки «у нас» — сравниваются только одинаковые коды, это общий
+ * знаменатель. Номер витрины появляется после точечной сверки её карточки тура; пока
+ * его нет, строка честно говорит «не сверен», а не делает вид, что сверила.
  */
-function Checkin({ f }) {
+function Basis({ f }) {
   const day = f.checked_checkin || f.reference_checkin;
   if (!day) return null;
-  const extras = [f.checked_meal, f.checked_room].filter(Boolean).join(" · ");
-  return (
-    <div className="mt-0.5 text-[11px] text-muted">
-      заезд {formatDate(day)}
-      {extras ? ` · у нас ${extras}` : ""}
-    </div>
-  );
+  const parts = [`заезд ${formatDate(day)}`];
+  if (f.checked_meal) parts.push(f.checked_meal);
+  if (f.reference_room) {
+    parts.push(`номер: «${f.checked_room || "?"}» ≈ «${f.reference_room}»`);
+  } else if (f.checked_room) {
+    parts.push(`у нас ${f.checked_room} · номер витрины не сверен`);
+  }
+  return <div className="mt-0.5 text-[11px] text-muted">{parts.join(" · ")}</div>;
 }
 
 const routeLabel = (f) =>

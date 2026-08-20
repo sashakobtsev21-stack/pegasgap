@@ -39,6 +39,7 @@ from pegasgap.ranking import (
     reference_has_operator,
     to_yaml_routes,
 )
+from pegasgap.roomcheck import pin_rooms
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 
 app = typer.Typer(add_completion=False, help="Мониторинг пропусков туроператора на выдаче Слетать.")
@@ -98,6 +99,8 @@ async def _run_one(params: SearchParams, operator: str, headless: bool,
 
 async def _diagnose(scan: ScanResult) -> None:
     """Проставить отельным пропускам причину по справочникам. Ошибки не фатальны."""
+    # Номера ценовых находок сверяются с самой витриной — см. roomcheck.
+    await pin_rooms(scan)
     country_id = await resolve_country_id(scan.params.destination_country)
     catalog = await fetch_catalog(country_id) if country_id else []
     # Чтение базы блокирующее — уводим в поток, чтобы не морозить цикл событий, когда

@@ -11,6 +11,7 @@ from decimal import Decimal
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER, detect, operator_status
 from pegasgap.models import (
     PEGAS,
+    DayOffer,
     GapKind,
     HotelOffer,
     Offer,
@@ -32,11 +33,14 @@ CHECKIN = date(2026, 9, 12)
 
 
 def hotel(name: str, price: str, provider: str, stars: int | None = None,
-          checkin: date | None = CHECKIN) -> HotelOffer:
+          checkin: date | None = CHECKIN, meal: str = "AI") -> HotelOffer:
+    # Питание по умолчанию одно на всех: сравнение требует общего состава, и
+    # предложение без него из ценовых сравнений выпадает — как и в жизни.
     return HotelOffer(
         provider=provider, hotel_name=name, price=Decimal(price), stars=stars,
         checkin=checkin,
-        prices_by_date={checkin: Decimal(price)} if checkin else {})
+        day_offers={checkin: [DayOffer(price=Decimal(price), meal=meal)]}
+        if checkin else {})
 
 
 def result(provider: str, hotels: list[HotelOffer] | None = None, **kw) -> ProviderResult:
@@ -481,10 +485,12 @@ def test_prices_are_compared_on_a_shared_check_in():
     ref, chk = [], []
     for i in range(4):
         r = hotel(f"H{i}", "100000", "tourvisor", checkin=None)
-        r.prices_by_date = {day: Decimal("100000"), other: Decimal("90000")}
+        r.day_offers = {day: [DayOffer(price=Decimal("100000"), meal="AI")],
+                        other: [DayOffer(price=Decimal("90000"), meal="AI")]}
         c = hotel(f"H{i}", "110000", "sletat", checkin=None)
         # Наш минимум лежит на ДРУГОЙ дате, чем минимум витрины.
-        c.prices_by_date = {day: Decimal("101000"), other: Decimal("110000")}
+        c.day_offers = {day: [DayOffer(price=Decimal("101000"), meal="AI")],
+                        other: [DayOffer(price=Decimal("110000"), meal="AI")]}
         ref.append(r)
         chk.append(c)
     scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
@@ -501,3 +507,31 @@ def test_no_shared_check_in_means_no_price_finding():
     scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
     assert scan.gaps_of(GapKind.PRICE) == []
     assert scan.price_offset_pct is None
+
+
+def test_meal_must_match_before_prices_are_compared():
+    """AI против RO дороже на треть безо всякой разницы площадок. Пара без общего
+    питания — не пара."""
+    ref = [hotel(f"H{i}", "100000", "tourvisor", meal="RO") for i in range(4)]
+    chk = [hotel(f"H{i}", "133000", "sletat", meal="AI") for i in range(4)]
+    scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
+    assert scan.gaps_of(GapKind.PRICE) == []
+    assert scan.price_offset_pct is None
+
+
+def test_comparison_picks_the_cheapest_shared_meal():
+    """Внутри одной даты сравнивается одинаковое питание, и берётся самое дешёвое по
+    витрине — то, что человек увидит первым."""
+    ref, chk = [], []
+    for i in range(4):
+        r = hotel(f"H{i}", "70000", "tourvisor", checkin=None)
+        r.day_offers = {CHECKIN: [DayOffer(price=Decimal("100000"), meal="AI"),
+                                  DayOffer(price=Decimal("70000"), meal="RO")]}
+        c = hotel(f"H{i}", "71000", "sletat", checkin=None)
+        c.day_offers = {CHECKIN: [DayOffer(price=Decimal("135000"), meal="AI"),
+                                  DayOffer(price=Decimal("71400"), meal="RO")]}
+        ref.append(r)
+        chk.append(c)
+    scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
+    # Сошлись RO против RO (70000 → 71400, +2%), а не AI против RO.
+    assert scan.price_offset_pct == 2.0

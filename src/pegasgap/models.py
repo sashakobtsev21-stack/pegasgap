@@ -145,6 +145,21 @@ class OperatorOffer(BaseModel):
     raw_label: str = ""
 
 
+class DayOffer(BaseModel):
+    """Одно предложение отеля в разрезе заезда: цена и её состав, как назвала площадка.
+
+    Состав здесь не украшение, а условие сравнимости: без питания и номера две цены на
+    одну дату всё ещё могут означать «AI против RO» или «сюит против промо».
+    """
+
+    price: Decimal
+    meal: str | None = None      # базовый код питания (RO/BB/HB/FB/AI/UAI); None — не распознано
+    room: str | None = None      # название номера как есть; None — площадка не сообщила
+    # Идентификатор тура на витрине: по нему `actualize.php` отдаёт имя номера, которого
+    # в поисковой выдаче нет. Заполняется только эталонной стороной.
+    tour_id: str | None = None
+
+
 class HotelOffer(BaseModel):
     """Предложение по отелю: отель + цена и характеристики."""
 
@@ -164,10 +179,11 @@ class HotelOffer(BaseModel):
     checkin: date | None = None
     meal: str | None = None
     room: str | None = None
-    # Минимальная цена по каждому заезду окна. Нужна, чтобы сравнивать цены площадок на
-    # ОДНУ дату: минимум по всему окну каждая площадка выбирает сама, и он сплошь и рядом
-    # приходится на разные дни — тогда «дороже на 9%» это разница дат, а не площадок.
-    prices_by_date: dict[date, Decimal] = Field(default_factory=dict)
+    # Предложения по каждому заезду окна. Разрез нужен, чтобы сравнивать площадки на
+    # ОДИНАКОВОМ составе: минимум по всему окну каждая сторона выбирает сама, и он
+    # сплошь и рядом приходится на разные дни и разное питание — тогда «дороже на 9%»
+    # это разница состава тура, а не площадок.
+    day_offers: dict[date, list[DayOffer]] = Field(default_factory=dict)
 
     @property
     def label(self) -> str:
@@ -413,6 +429,12 @@ class HotelGap(BaseModel):
     # площадок, а это первое, что надо исключить, глядя на расхождение цены.
     reference_checkin: date | None = None
     checked_checkin: date | None = None
+    # Название номера на витрине. В её поисковой выдаче его нет — достаётся точечной
+    # сверкой через actualize по `reference_tour_id`, поэтому None означает «не сверяли
+    # или не удалось», а не «номера нет».
+    reference_room: str | None = None
+    # Ключ той самой сверки. Живёт только внутри прогона, в базу не пишется.
+    reference_tour_id: str | None = None
     checked_meal: str | None = None
     checked_room: str | None = None
 

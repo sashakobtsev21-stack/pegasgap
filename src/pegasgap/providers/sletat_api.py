@@ -39,6 +39,7 @@ from typing import Any
 
 import httpx
 
+from pegasgap.basis import add_day_offer, normalize_meal
 from pegasgap.models import (
     HotelOffer,
     NotApplicableError,
@@ -243,16 +244,14 @@ def build_hotel_offers(rows: list[list], operator: str) -> list[HotelOffer]:
         )
         seen = best.get(name)
         if seen is None or offer.price < seen.price:
-            offer.prices_by_date = seen.prices_by_date if seen else {}
+            offer.day_offers = seen.day_offers if seen else {}
             best[name] = offer
             seen = offer
-        # Цена по каждому заезду копится независимо от того, чьё предложение стало
-        # минимумом: сравнивать площадки надо на одну дату, а не на два разных минимума.
-        day = offer.checkin
-        if day is not None:
-            known = seen.prices_by_date.get(day)
-            if known is None or offer.price < known:
-                seen.prices_by_date[day] = offer.price
+        # Разрез по составу копится независимо от того, чьё предложение стало минимумом:
+        # сравнивать площадки надо на одинаковом составе — заезд, питание, номер, — а не
+        # на двух минимумах, каждый из которых собран по-своему.
+        add_day_offer(seen.day_offers, offer.checkin, offer.price,
+                      normalize_meal(offer.meal), offer.room)
     return sorted(best.values(), key=lambda h: h.price)
 
 
