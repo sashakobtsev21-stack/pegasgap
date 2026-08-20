@@ -75,7 +75,7 @@ export default function GapsPage({ runId }) {
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <Stat label="Турвизор" value={`${data.reference_status} · ${data.reference_hotels} отелей`} />
-          <Stat label="наша выдача" value={data.checked_status} />
+          <Stat label="Слетать" value={data.checked_status} />
           <Stat label="сопоставлено" value={data.matched_hotels} />
           {data.price_offset_pct != null && (
             <Stat label="сдвиг цен" value={`${data.price_offset_pct > 0 ? "+" : ""}${data.price_offset_pct}%`} />
@@ -122,8 +122,8 @@ export default function GapsPage({ runId }) {
                     <th className="py-2 pr-3 font-semibold">Класс</th>
                     <th className="py-2 pr-3 font-semibold">Отель</th>
                     <th className="py-2 pr-3 font-semibold">Причина</th>
-                    <th className="py-2 pr-3 text-right font-semibold">Эталон</th>
-                    <th className="py-2 pr-3 text-right font-semibold">Наша</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Турвизор</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Слетать</th>
                     <th className="py-2 pr-3 text-right font-semibold">Δ</th>
                     <th className="py-2 font-semibold">Комментарий</th>
                   </tr>

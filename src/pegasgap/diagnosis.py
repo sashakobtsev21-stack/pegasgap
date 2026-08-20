@@ -155,10 +155,12 @@ def diagnose_gap(gap: HotelGap, index: CatalogIndex, links: LinkSet) -> None:
         gap.note = f"{where} — выключен в справочнике Слетать"
     elif links.has(hotel.id):
         gap.diagnosis = HotelDiagnosis.LINKED_NO_OFFER
-        gap.note = f"{where} — связан с каталогом оператора"
+        gap.note = (f"{where} — слинкован с оператором: справочники в порядке, "
+                    f"причина в наличии или в самом поиске")
     else:
         gap.diagnosis = HotelDiagnosis.NOT_LINKED
-        gap.note = f"{where} — связи с каталогом оператора нет"
+        gap.note = (f"{where} — не слинкован с этим оператором: его туры в этот "
+                    f"отель не могут попасть в выдачу, нужно связать справочники")
 
 
 # Какая доля пропущенных отелей должна уверенно опознаться в нашем справочнике, чтобы

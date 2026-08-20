@@ -112,7 +112,7 @@ def test_actions_are_summarised_per_diagnosis(client):
     actions = client.get(f"/api/runs/{run_id}").json()["actions"]
     assert len(actions) == 1
     assert actions[0]["count"] == 1
-    assert "связать" in actions[0]["action"]
+    assert "слинковать" in actions[0]["action"]
 
 
 def test_untrustworthy_run_exposes_problems(client):

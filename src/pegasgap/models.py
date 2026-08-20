@@ -315,11 +315,11 @@ class GapKind(StrEnum):
         # «отеля» против «туров» — то есть ровно тем, чем отличаются по смыслу: одна
         # запись против всего направления.
         return {
-            GapKind.FULL: "Нет туров на Слетать",
+            GapKind.FULL: "Выдача Слетать пуста",
             GapKind.NOT_RESPONDING: "Оператор не ответил",
-            GapKind.HOTEL: "Отеля нет на Слетать",
+            GapKind.HOTEL: "Отеля нет в выдаче Слетать",
             GapKind.PRICE: "Цена расходится",
-            GapKind.REVERSE: "Отеля нет на Турвизоре",
+            GapKind.REVERSE: "Отеля нет в выдаче Турвизора",
         }[self]
 
     @property
@@ -369,7 +369,7 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.NOT_IN_CATALOG: "нет в справочнике",
             HotelDiagnosis.NOT_LINKED: "нет линковки",
             HotelDiagnosis.CATALOG_DISABLED: "отель выключен",
-            HotelDiagnosis.LINKED_NO_OFFER: "линкован, тура нет",
+            HotelDiagnosis.LINKED_NO_OFFER: "слинкован, тура нет",
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "есть в справочнике",
             HotelDiagnosis.UNCERTAIN: "не опознан",
             HotelDiagnosis.REF_LISTED_NO_TOURS: "заведён, туров нет",
@@ -388,8 +388,8 @@ class HotelDiagnosis(StrEnum):
         """
         return {
             HotelDiagnosis.NOT_IN_CATALOG: "отеля нет в справочнике Слетать — не заведён",
-            HotelDiagnosis.NOT_LINKED: "отель в справочнике есть, но не связан с каталогом "
-                                       "оператора",
+            HotelDiagnosis.NOT_LINKED: "отель в нашем справочнике есть, но не слинкован с "
+                                       "этим оператором — его туры не могут попасть в выдачу",
             HotelDiagnosis.LINKED_NO_OFFER: "справочники в порядке — значит у оператора нет "
                                             "наличия либо поиск до него не дошёл",
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "отель в справочнике есть; вероятнее всего "
@@ -410,7 +410,7 @@ class HotelDiagnosis(StrEnum):
     def action(self) -> str:
         return {
             HotelDiagnosis.NOT_IN_CATALOG: "завести отель в справочнике Слетать",
-            HotelDiagnosis.NOT_LINKED: "связать отель оператора с внутренним справочником",
+            HotelDiagnosis.NOT_LINKED: "слинковать отель с каталогом оператора",
             HotelDiagnosis.LINKED_NO_OFFER: "справочники в порядке — смотреть наличие "
                                             "у оператора и логи поиска",
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "проверить линковку у оператора "

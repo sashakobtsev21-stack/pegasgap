@@ -97,7 +97,7 @@ def test_unlinked_hotel_points_at_linking():
     g = diagnosed("Sun Star Beach")
     assert g.diagnosis is HotelDiagnosis.NOT_LINKED
     assert g.catalog_id == 40475
-    assert "связать" in g.diagnosis.action
+    assert "слинковать" in g.diagnosis.action
 
 
 def test_without_db_we_do_not_claim_missing_link():
