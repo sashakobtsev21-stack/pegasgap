@@ -231,3 +231,16 @@ def test_different_hotels_do_not_collide_through_transliteration():
         is Confidence.NONE
     assert compare(h("САНРАЙЗ", dest="Хургада"), h("Sun City", dest="Хургада"))[0] \
         is Confidence.NONE
+
+
+def test_short_core_does_not_get_promoted_by_transliteration():
+    """Схлопывание удвоенных букв укорачивает ядро: «Moss» становится «mos», а он входит
+    в «mosaiclaleli». Правило о минимальной длине ядра действует и здесь — иначе
+    «MOSAIC HOTEL LALELI» уверенно склеивался с «The Moss Hotel»."""
+    conf, _ = compare(h("MOSAIC HOTEL LALELI"), h("The Moss Hotel"))
+    assert conf is Confidence.WEAK
+
+
+def test_guest_house_is_noise_like_its_russian_twin():
+    """«Гостевой дом» в шумовых словах был, а «guest house» — нет, хотя это одно и то же."""
+    assert compare(h("КОРАЛЛ"), h("Guest House Korall"))[0].comparable

@@ -37,6 +37,7 @@ from pegasgap.models import HotelOffer
 _NOISE = {
     "hotel", "hotels", "resort", "resorts", "spa", "and", "the", "by", "de", "el",
     "club", "apartments", "apart", "aparthotel", "villas", "suites", "beach", "inn",
+    "guest", "house", "guesthouse",
     "отель", "гостиница", "апартаменты", "апарт", "клуб", "пляж", "спа",
     "гостевой", "дом", "пансионат", "санаторий", "база", "отдыха", "мини",
     "adults", "only", "all", "inclusive", "ultra",
@@ -267,21 +268,31 @@ def _cross_script(a: HotelOffer, b: HotelOffer) -> tuple[Confidence, str]:
       курорт тот же. Без подпорок остаётся WEAK и уходит в корзину проверки, а не в
       пропуски. Ложная пара здесь дороже пропущенной: она молча прячет настоящий пропуск.
     """
-    exact_in_ascii = False
-    best_ratio = 0.0
+    best_level, best_ratio = Confidence.NONE, 0.0
     for ca in ascii_cores(a.hotel_name):
         for cb in ascii_cores(b.hotel_name):
             if not ca or not cb:
                 continue
-            if _pair_confidence(ca, cb) is not Confidence.NONE:
-                exact_in_ascii = True
+            # Сила берётся тем же правилом, что и в своём алфавите, — вместе с порогом на
+            # длину ядра. Раньше здесь любое ненулевое совпадение засчитывалось как
+            # сильное, и короткие вхождения проскакивали мимо порога: «Moss» после
+            # схлопывания удвоенных букв превращается в «mos», а он входит в
+            # «mosaiclaleli», и «MOSAIC HOTEL LALELI» уверенно склеивался с «The Moss
+            # Hotel». Транслитерация делает ядра короче, поэтому порог здесь нужнее, а не
+            # наоборот.
+            level = _pair_confidence(ca, cb)
+            if _ORDER[level] > _ORDER[best_level]:
+                best_level = level
             best_ratio = max(best_ratio, SequenceMatcher(None, ca, cb).ratio())
 
-    if not exact_in_ascii and best_ratio < _FUZZY_WEAK:
+    if best_level is Confidence.NONE and best_ratio < _FUZZY_WEAK:
         return Confidence.NONE, ""
     if _stars_conflict(a, b):
         return Confidence.WEAK, f"похоже на то же название, но звёзды разошлись ({a.stars} и {b.stars})"
-    if exact_in_ascii:
+    if best_level is Confidence.WEAK:
+        return Confidence.WEAK, "похожее написание другим алфавитом, но совпадение короткое"
+    if best_level is not Confidence.NONE:
+        # EXACT не выдаём: буквального совпадения не было, его дала транслитерация.
         return Confidence.STRONG, "то же название другим алфавитом"
     if best_ratio >= _FUZZY_STRONG or _same_resort(a, b):
         where = ", курорт тот же" if _same_resort(a, b) else ""
