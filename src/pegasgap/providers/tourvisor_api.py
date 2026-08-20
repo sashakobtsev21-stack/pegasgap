@@ -218,11 +218,32 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
                 rating=_to_float(ref.get("rating")),
                 destination=regions.get(_to_int(ref.get("regioncode")) or -1),
                 raw_label=str(row.get("id")),
+                # Заезд того самого тура, чью цену показываем. Без него видно «дороже на
+                # 16%», но не видно, что минимумы площадок пришлись на разные даты, — а
+                # это первое объяснение расхождения, которое надо исключить.
+                checkin=_cheapest_checkin(row),
             )
             seen = best.get(name)
             if seen is None or offer.price < seen.price:
                 best[name] = offer
     return sorted(best.values(), key=lambda h: h.price)
+
+
+def _cheapest_checkin(row: dict) -> date | None:
+    """Дата заезда у самого дешёвого тура отеля.
+
+    Цена отеля в выдаче — это минимум по его турам, и каждый тур несёт свою дату (`dt`)
+    и цену (`pr`). Берём дату того тура, чья цена и стала ценой отеля: показывать чужую
+    дату рядом с ценой хуже, чем не показывать никакой.
+    """
+    best: tuple[Decimal, date] | None = None
+    for tour in row.get("tour") or []:
+        price, day = _to_decimal(tour.get("pr")), _parse_day(tour.get("dt"))
+        if price is None or day is None:
+            continue
+        if best is None or price < best[0]:
+            best = (price, day)
+    return best[1] if best else None
 
 
 def split_operators(states: list[dict]) -> tuple[list[Offer], list[str], list[str]]:

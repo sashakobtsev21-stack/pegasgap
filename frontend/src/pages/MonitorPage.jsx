@@ -418,26 +418,39 @@ function Prices({ f }) {
       </div>
       {diff != null && (
         <div className={diff > 0 ? "text-amber-300" : "text-emerald-300"}>
-          {diff > 0 ? "у нас дороже" : "у нас дешевле"} на{" "}
+          {/* Имя площадки, а не «у нас»: эталона больше нет, и дороже бывает любая
+              сторона — на живых данных обратных случаев каждый восьмой. */}
+          {diff > 0 ? "на Слетать дороже" : "на Турвизоре дороже"} на{" "}
           {money(Math.abs(f.checked_price - f.reference_price))} ({diff > 0 ? "+" : ""}
           {diff.toFixed(1)}%)
         </div>
       )}
-      {/* На какой заезд пришлась НАША цена. В окне у отеля десяток заездов с разной
-          ценой, и минимум с двух площадок легко приходится на разные даты — без этой
-          строки «расхождение» читается как разница площадок, хотя это разница дат. */}
-      {f.checked_checkin && (
-        <div className="mt-0.5 text-[11px] text-muted">
-          наш минимум: заезд {formatDate(f.checked_checkin)}
-          {f.checked_meal ? ` · ${f.checked_meal}` : ""}
-          {f.checked_room ? ` · ${f.checked_room}` : ""}
-        </div>
-      )}
+      {/* На какие заезды пришлись сравниваемые цены. Минимум по окну каждая площадка
+          выбирает сама, и даты легко расходятся: тогда «дороже на 16%» — это разница
+          дат, а не площадок. Первое, что нужно исключить, глядя на расхождение. */}
+      <Checkins f={f} />
     </div>
   );
 }
 
-const nightsLabel = (f) =>
+/** Заезды обеих сторон. Совпали — одна строка; разошлись — предупреждение. */
+function Checkins({ f }) {
+  const ours = f.checked_checkin;
+  const theirs = f.reference_checkin;
+  if (!ours && !theirs) return null;
+  const extras = [f.checked_meal, f.checked_room].filter(Boolean).join(" · ");
+  const apart = ours && theirs && ours !== theirs;
+  return (
+    <div className={`mt-0.5 text-[11px] ${apart ? "text-amber-300/80" : "text-muted"}`}>
+      {apart
+        ? `сравниваются разные заезды: Слетать ${formatDate(ours)}, Турвизор ${formatDate(theirs)}`
+        : `заезд ${formatDate(ours || theirs)}`}
+      {extras ? ` · ${extras}` : ""}
+    </div>
+  );
+}
+
+const nightsLabel = (f) =
   f.params?.nights_min === f.params?.nights_max
     ? `${f.params?.nights_min} ноч.`
     : `${f.params?.nights_min}–${f.params?.nights_max} ноч.`;

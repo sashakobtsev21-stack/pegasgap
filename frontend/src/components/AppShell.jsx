@@ -38,7 +38,7 @@ export default function AppShell({ route = "/", children }) {
         variants={fadeUp}
         initial="hidden"
         animate="show"
-        className="glass-surface sticky top-0 z-30 border-x-0 border-t-0"
+        className="app-header sticky top-0 z-30"
       >
         <div className="mx-auto flex h-16 max-w-[1800px] items-center gap-3 px-5">
           <a href="#/" className="flex items-center gap-3">

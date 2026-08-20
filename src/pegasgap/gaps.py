@@ -305,6 +305,7 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             # его проставляет диагностика, а здесь отель у нас есть — берём как есть.
             reference_hotel_id=_as_int(m.reference.raw_label),
             catalog_id=_as_int(m.checked.raw_label),
+            reference_checkin=m.reference.checkin,
             checked_checkin=m.checked.checkin,
             checked_meal=m.checked.meal,
             checked_room=m.checked.room,
