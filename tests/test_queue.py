@@ -369,3 +369,42 @@ def test_worker_does_not_override_the_case_operator():
     src = inspect.getsource(Worker._scan)
     assert "case.to_params()" in src
     assert "self.operator" not in src
+
+
+# --- Ключ переживает смену дня ------------------------------------------------------
+
+def test_key_is_the_same_scenario_on_a_different_day():
+    """Окно задано смещением, и на календарных датах тот же самый кейс назавтра получал
+    другой ключ."""
+    monday, tuesday = date(2026, 8, 19), date(2026, 8, 20)
+    same = [
+        q.case_key("Москва", "Турция", "tours", day + timedelta(days=14),
+                   day + timedelta(days=21), 7, 2, [], PEGAS, day)
+        for day in (monday, tuesday)
+    ]
+    assert same[0] == same[1]
+
+
+def test_different_windows_are_still_different_cases():
+    day = date(2026, 8, 19)
+    near = q.case_key("Москва", "Турция", "tours", day + timedelta(days=14),
+                      day + timedelta(days=21), 7, 2, [], PEGAS, day)
+    far = q.case_key("Москва", "Турция", "tours", day + timedelta(days=60),
+                     day + timedelta(days=67), 7, 2, [], PEGAS, day)
+    longer = q.case_key("Москва", "Турция", "tours", day + timedelta(days=14),
+                        day + timedelta(days=28), 7, 2, [], PEGAS, day)
+    assert len({near, far, longer}) == 3
+
+
+def test_reseeding_the_next_day_retires_nothing(conn):
+    """Главный симптом прежнего ключа: пересборка гасила ВСЮ очередь и заводила такую же
+    новую — «3960 актуальных, 3960 отключено», а давность проверки обнулялась."""
+    matrix = Matrix(routes=[("Москва", "ОАЭ")], modes=["tours"],
+                    windows=[Window(30)], pax=[Pax()])
+    q.seed_from_matrix(conn, matrix, date(2026, 9, 1))
+    q.mark_checked(conn, q.next_case(conn).id, run_id=7, gaps=3)
+
+    seeded, retired = q.seed_from_matrix(conn, matrix, date(2026, 9, 2))
+    assert (seeded, retired) == (1, 0)
+    assert q.stats(conn)["total"] == 1
+    assert q.list_cases(conn)[0].checks == 1

@@ -99,13 +99,28 @@ class Case:
                 f"{self.nights} ноч., {self.adults} взр.{kids}, {mode}")
 
 
+def window_slug(date_from: date, date_to: date, today: date | None = None) -> str:
+    """Окно дат как СМЕЩЕНИЕ от дня сборки, а не как календарный диапазон.
+
+    Окна в конфиге и заданы смещениями («через две недели», «через два месяца»), а
+    календарные даты — лишь их отпечаток на конкретный день. В ключе должно стоять то,
+    что задано, иначе назавтра тот же самый кейс получает другой ключ.
+    """
+    base = today or date.today()
+    return f"+{(date_from - base).days}d..{(date_to - date_from).days}d"
+
+
 def case_key(departure_city: str, country: str, mode: str, date_from: date, date_to: date,
              nights: int, adults: int, children_ages: list[int],
-             operator: str = PEGAS) -> str:
+             operator: str = PEGAS, today: date | None = None) -> str:
     """Стабильный ключ кейса.
 
-    Даты входят в ключ как есть: кейс на конкретное окно — это конкретная проверка, и
-    завтрашнее окно с тем же смещением от «сегодня» будет уже другим кейсом.
+    Окно входит в ключ смещением, а не датами. Раньше стояли календарные даты, и это
+    делало ключ одноразовым: окна отсчитываются от дня сборки, поэтому назавтра у ВСЕХ
+    кейсов ключи другие. Каждая пересборка гасила всю прежнюю очередь целиком и заводила
+    такую же новую — «3960 актуальных, 3960 отключено». Таблица росла на очередные 3960
+    строк, а давность проверки по кейсу обнулялась, хотя приоритет обхода на неё
+    опирается.
 
     Оператор — тоже часть ключа: один и тот же поиск по Pegas и по Coral даёт разную
     выдачу и разные пропуски, и схлопывать их в один кейс нельзя. Он идёт ПОСЛЕДНИМ и со
@@ -113,7 +128,7 @@ def case_key(departure_city: str, country: str, mode: str, date_from: date, date
     очередь не потеряла историю проверок.
     """
     kids = ",".join(str(a) for a in sorted(children_ages))
-    base = (f"{mode}|{departure_city}|{country}|{date_from:%Y-%m-%d}..{date_to:%Y-%m-%d}"
+    base = (f"{mode}|{departure_city}|{country}|{window_slug(date_from, date_to, today)}"
             f"|{nights}|{adults}+{kids}")
     return base if operator == PEGAS else f"{base}|{operator}"
 
@@ -141,7 +156,8 @@ def _row_to_case(row: sqlite3.Row) -> Case:
 def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
              search_mode: str, date_from: date, date_to: date, nights: int,
              adults: int = 2, children_ages: list[int] | None = None,
-             priority: int = 0, operator: str = PEGAS) -> int:
+             priority: int = 0, operator: str = PEGAS,
+             today: date | None = None) -> int:
     """Добавить кейс. Существующий не дублируется, но приоритет обновляется.
 
     Обновляем именно приоритет: объёмы у оператора меняются, и повторный посев не должен
@@ -150,7 +166,7 @@ def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
     """
     children_ages = children_ages or []
     key = case_key(departure_city, country, search_mode, date_from, date_to,
-                   nights, adults, children_ages, operator)
+                   nights, adults, children_ages, operator, today)
     cur = conn.execute(
         """INSERT INTO cases (case_key, operator, departure_city, country, search_mode,
                               date_from, date_to, nights, adults, children_ages, priority)
@@ -257,7 +273,7 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix,
         wanted.append(case_key(
             params.departure_city, params.destination_country, params.search_mode,
             params.date_from, params.date_to, params.nights_min, params.adults,
-            list(params.children_ages), operator))
+            list(params.children_ages), operator, today))
         add_case(
             conn,
             operator=operator,
@@ -270,6 +286,10 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix,
             adults=params.adults,
             children_ages=list(params.children_ages),
             priority=weight.get((params.departure_city, params.destination_country), 0),
+            # Тот же день, что и у `matrix.build` выше: окно в ключе — это смещение от
+            # него, и разойтись здесь значит завести кейс с одним ключом, а искать по
+            # другому — то есть погасить его тут же, следующей строкой.
+            today=today,
         )
     placeholders = ",".join("?" * len(wanted)) or "NULL"
     cur = conn.execute(
