@@ -436,6 +436,18 @@ async def _fill_links(db: Path) -> tuple[int, int]:
     return runs_done, gaps_done
 
 
+@app.command()
+def doctor(db: Path = typer.Option(Path("pegasgap.db"), help="База находок")) -> None:
+    """Проверить инварианты базы и сойтись в счётчиках (блок Ж плана AUDIT.md)."""
+    from pegasgap.doctor import report, run_checks
+
+    with storage.session(db) as conn:
+        checks = run_checks(conn)
+    console.print(report(checks))
+    if any(not c.ok for c in checks):
+        raise typer.Exit(code=1)
+
+
 @app.command("fill-links")
 def fill_links(
     db: Path = typer.Option(storage.DEFAULT_DB, "--db", help="Файл базы"),

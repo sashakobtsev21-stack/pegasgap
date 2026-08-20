@@ -231,9 +231,24 @@ def variants(name: str) -> list[str]:
     inner = _PARENS.findall(raw)
     if inner:
         outer = _PARENS.sub(" ", raw).strip()
+        if outer:
+            forms.append(outer)
         # Приписку «(ex. …)» в альтернативы не берём: это ПРОШЛОЕ имя отеля, а не второе
         # написание нынешнего, и по нему можно сойтись с чужим объектом.
-        forms += [f for f in [outer, *inner] if f and not _EX_SUFFIX.match(f.strip())]
+        #
+        # И не всякая скобка — второе написание. «(САЛЬВЭ)» и «(TAMISH VILLAGE)» — оно;
+        # «(Collection)» — брендовая приписка, и как самостоятельная форма она склеила
+        # «Avantgarde Urban Sisli (Collection)» с «CRYSTAL … COMFORT COLLECTION» — двумя
+        # разными отелями в разных городах. Форма из скобок принимается, только если она
+        # написана другим алфавитом, чем остальное имя, либо несёт два и более значимых
+        # слова: одиночное слово того же алфавита — почти всегда приписка.
+        outer_cyr = bool(_CYRILLIC.search(outer))
+        for form in inner:
+            if not form.strip() or _EX_SUFFIX.match(form.strip()):
+                continue
+            other_script = bool(_CYRILLIC.search(form)) != outer_cyr
+            if other_script or len(normalize(form).split()) >= 2:
+                forms.append(form)
     seen: set[str] = set()
     out: list[str] = []
     for form in forms:
@@ -424,11 +439,21 @@ def match_hotels(reference: list[HotelOffer], checked: list[HotelOffer]) -> Matc
     free = list(checked)
     pending = list(reference)
 
-    for level in (Confidence.EXACT, Confidence.STRONG, Confidence.WEAK):
+    # Внутри каждого уровня уверенности — два прохода: сначала пары с совпавшим
+    # курортом, потом остальные. Иначе одноимённые отели разных курортов спариваются
+    # перекрёстно: живой случай — «TURQUOISE RESORT» (Сиде) забрал наш «Turquoise Hotel»
+    # (Олюдениз), а «OLUDENIZ TURQUOISE» достался нашему «Turquoise». Курорт здесь не
+    # вето (имена курортов у площадок расходятся), а порядок предпочтения.
+    levels = [(lvl, pref)
+              for lvl in (Confidence.EXACT, Confidence.STRONG, Confidence.WEAK)
+              for pref in (True, False)]
+    for level, want_resort in levels:
         still: list[HotelOffer] = []
         for ref in pending:
             best: tuple[HotelOffer, str] | None = None
             for cand in free:
+                if want_resort and not _same_resort(ref, cand):
+                    continue
                 confidence, reason = compare(ref, cand)
                 if confidence is level:
                     best = (cand, reason)

@@ -1,0 +1,607 @@
+country	confidence	reference_name	checked_name	reason	verdict
+Абхазия	exact	ОНИКС	Отель Оникс	названия совпали	
+Абхазия	exact	ДИВА	Дива (Алахадзы)	названия совпали	
+Абхазия	exact	КАЛИПСО ЦАНДРИПШ	Калипсо (Цандрипш)	названия совпали	
+Абхазия	exact	KULIKOV HOUSE (КУЛИКОВ ХАУС)	Kulikov house	названия совпали	
+Абхазия	exact	ДЕНИ ДЕЛЬМАР	Дени Дельмар	названия совпали	
+Абхазия	exact	ПОЛЯНА	Поляна (Алахадзы)	названия совпали	
+Абхазия	exact	ОЛИМП	Олимп	названия совпали	
+Абхазия	exact	АБААТА ПИЦУНДА	Абаата Пицунда	названия совпали	
+Абхазия	exact	ШАЛЕ У МОРЯ	Шале У Моря	названия совпали	
+Абхазия	exact	АПСИЛИА	Апсилиа (Мачара)	названия совпали	
+Абхазия	exact	VESNA (ВЕСНА)	Vesna Hotel	названия совпали	
+Абхазия	exact	СТРЕЛЕЦ	Мини-отель Стрелец	названия совпали	
+Абхазия	exact	ПАРК-ОТЕЛЬ АБХАЗИЯ	Парк-Отель Абхазия	названия совпали	
+Абхазия	exact	АБХАЗСКИЙ ДВОРИК	Абхазский дворик (Цандрипш)	названия совпали	
+Абхазия	exact	АБАС	Абас	названия совпали	
+Абхазия	exact	БЕЛАЯ ПАНАМА (АГАВА)	Белая панама	названия совпали	
+Абхазия	exact	КРИСТАЛЛ	Кристалл (Гечрипш)	названия совпали	
+Абхазия	exact	WHITE HOTEL (БЕЛЫЙ ДОМ)	White Hotel	названия совпали	
+Абхазия	exact	ГРЕЙС БРИЗ	Грейс Бриз	названия совпали	
+Абхазия	exact	АФОН ДАКИР	Афон-Дакир	названия совпали	
+Абхазия	exact	AURA CITY (БЫВШ. ЭЛИЗА)	Aura City Hotel	названия совпали	
+Абхазия	exact	GUD HOUSE (ГУД ХАУС)	Гуд Хаус	названия совпали	
+Абхазия	exact	САДЗЕН	Садзен (Цандрипш)	названия совпали	
+Абхазия	exact	LAKAA (ЛАКАА)	Лакаа (Алахадзы)	названия совпали	
+Абхазия	exact	ГРЕЙС САРИЯ	Грейс Сария	названия совпали	
+Абхазия	exact	TRISTAN (ТРИСТАН)	Тристан	названия совпали	
+Абхазия	exact	РЕЗИДЕНЦИЯ АПСНЫ	Резиденция Апсны	названия совпали	
+Абхазия	exact	АДУНЕИ СУХУМ	Отель Адунеи Сухум	названия совпали	
+Абхазия	exact	ДИНАСТИЯ	Династия	названия совпали	
+Абхазия	exact	ЭКЛИПС	Эклипс.	названия совпали	
+Абхазия	exact	PREHOTEL	PreHotel	названия совпали	
+Абхазия	exact	SANZAZILA	SanZazila	названия совпали	
+Абхазия	exact	КАМАРИТ	Камарит	названия совпали	
+Абхазия	exact	ГРЕЙС ТИХИЙ ДОН	Грейс Тихий Дон	названия совпали	
+Абхазия	exact	BLACK SEA	Black Sea	названия совпали	
+Абхазия	exact	ГОРНЫЙ РУЧЕЙ	Горный ручей	названия совпали	
+Абхазия	exact	ГРИФОН	Грифон	названия совпали	
+Абхазия	exact	PARADISE (ПАРАДАЙЗ)	Парадайз	названия совпали	
+Абхазия	exact	РУСЛАН И ДЖУЛЬЕТТА ГОСТЕВОЙ ДОМ	Руслан и Джульетта гостевой дом	названия совпали	
+Абхазия	exact	PARADISE BEACH HOTEL	Paradise Beach Hotel	названия совпали	
+Абхазия	exact	ЭКО-ПАПА (EX. ЛАГУНА)	Эко Папа	названия совпали	
+Абхазия	exact	ПАЛЬМА	Пальма	названия совпали	
+Абхазия	exact	БЕРЕГ СВЯТОЙ СОФИИ	Берег Святой Софии	названия совпали	
+Абхазия	exact	АБААТА	Абаата	названия совпали	
+Абхазия	exact	АНХАРА	Анхара	названия совпали	
+Абхазия	exact	ОНТАРИО	Онтарио	названия совпали	
+Абхазия	strong	АКВАРЕЛЬ ГАГРА	Гостевой дом Акварель	одно название содержится в другом	
+Абхазия	strong	ТАМЫШ ВИЛЛАДЖ (TAMISH VILLAGE)	Тамыш Village	то же название другим алфавитом	
+Абхазия	strong	ГЛЭМПИНГ ГРЕЙС ТИХИЙ БЕРЕГ	Грейс Тихий берег	одно название содержится в другом	
+Абхазия	strong	КОРАЛЛ	Guest House Korall	то же название другим алфавитом	
+Абхазия	strong	БУТИК-ОТЕЛЬ ПРОЛЕТО	ПроЛето	одно название содержится в другом	
+Абхазия	strong	АРДА (БЫВШ. СОФЬЯ)	Arda	то же название другим алфавитом	
+Абхазия	review	ЭДЕМ ПИЦУНДА	Эдем гостевой дом	названия похожи, но совпадение короткое	
+Абхазия	review	ОЛИМП ПАРК-ОТЕЛЬ	Olimp	похожее написание другим алфавитом, но совпадение короткое	
+Абхазия	review	АПРА ГУДАУТА	Апра	названия похожи, но совпадение короткое	
+Абхазия	review	АХЧИПСОУ	Гостевой Дом Ахчыпсы	похоже на то же название другим алфавитом (82%)	
+Турция	exact	KEMER STAR HOTEL (EX. KEMPER DINARA GARDEN)	Kemer Star Hotel	названия совпали	
+Турция	exact	BARHAN HOTEL (EX. MALDIVES BEACH HOTEL)	Barhan Hotel	названия совпали	
+Турция	exact	BRITANNIA HOTEL & VILLAS	Britannia Hotel & Villas	названия совпали	
+Турция	exact	SUITE LAGUNA	Suite Laguna Hotel	названия совпали	
+Турция	exact	INFINITY BEACH	Infinity Beach Hotel	названия совпали	
+Турция	exact	GREEN GARDEN CITY LUXURY APARTMENTS	Green Garden City Luxury Apartments	названия совпали	
+Турция	exact	BELKON HOTEL	Belkon	названия совпали	
+Турция	exact	DIAMORE HOTEL	Diamore	названия совпали	
+Турция	exact	A11 HOTEL OBAKOY (EX.TAKSIM INTERNATIONAL OBAKOY)	A11 Hotel Obakoy	названия совпали	
+Турция	exact	BIENO CLUB HOTEL SVS (EX. BONE CLUB HOTEL SVS)	Bieno Club Svs Hotel	названия совпали	
+Турция	exact	IMEROS HOTEL	Imeros Hotel	названия совпали	
+Турция	exact	MEYDE BOUTIQUE SUITES	Meyde Boutique & Suites	названия совпали	
+Турция	exact	ASPENDOS SUITES	Aspendos Suites	названия совпали	
+Турция	exact	ELYSIUM ELITE HOTEL & SPA (EX. AVALON BEACH HOTEL)	Elysium Elite Hotel & Spa	названия совпали	
+Турция	exact	MORE HOTEL	More Hotel	названия совпали	
+Турция	exact	ALANYA RISUS PARK (EX. MILLENNIUM PARK HOTEL)	Alanya Risus Park Hotel	названия совпали	
+Турция	exact	MEYDE PLUS SUITES	Meyde Plus Suites	названия совпали	
+Турция	exact	ASRIN BEACH	Asrin Beach Hotel	названия совпали	
+Турция	exact	SIDE YESILOZ HOTEL	Side Yesiloz	названия совпали	
+Турция	exact	GRAND BARHAN HOTEL (EX. AS BLUE COAST)	Grand Barhan Hotel	названия совпали	
+Турция	exact	COMFORT SUITES	Comfort Suites	названия совпали	
+Турция	exact	ALEXIUS BEACH HOTEL (EX. BELDIANA CLUB)	Alexius Beach Hotel	названия совпали	
+Турция	exact	ARES DREAM (EX. CLUB ARES, QUEEN VICTORIA)	Ares Dream	названия совпали	
+Турция	exact	RELAX BEACH HOTEL	Relax Beach Hotel	названия совпали	
+Турция	exact	MC MAHBERI BEACH HOTEL	MC Mahberi Beach Hotel	названия совпали	
+Турция	exact	GREEN PEACE	Green Peace	названия совпали	
+Турция	exact	PALMEA HOTEL	Palmea	названия совпали	
+Турция	exact	BARISCAN HOTEL	Bariscan Hotel	названия совпали	
+Турция	exact	SUNPARK GARDEN	Sunpark Garden Hotel	названия совпали	
+Турция	exact	KLEOPATRA BEACH HOTEL	Kleopatra Beach	названия совпали	
+Турция	exact	SERIN	Serin	названия совпали	
+Турция	exact	PALMORA LARA HOTEL (EX. JURA HOTELS LARA RESORT)	Palmora Lara Hotel	названия совпали	
+Турция	exact	KLEOPATRA ADA BEACH	Kleopatra Ada Beach Hotel	названия совпали	
+Турция	exact	FELICE	Felice	названия совпали	
+Турция	exact	BLUE FISH	Blue Fish Hotel	названия совпали	
+Турция	exact	KANDELOR HOTEL (EX. XPERIA KANDELOR HOTEL)	Kandelor Hotel	названия совпали	
+Турция	exact	MR CRANE	Mr. Crane	названия совпали	
+Турция	exact	ANANAS HOTEL	Ananas	названия совпали	
+Турция	exact	VIKING EXPRESS (EX. VIKING SUITE)	Viking Express Hotel	названия совпали	
+Турция	exact	KLEOPATRA ROYAL PALM	Kleopatra Royal Palm	названия совпали	
+Турция	exact	STELLA HOTEL	Stella Hotel	названия совпали	
+Турция	exact	ALP PASA HOTEL	Alp Pasa Hotel	названия совпали	
+Турция	exact	SIMPLY FINE HOTEL ALIZE	Simply Fine Hotel Alize	названия совпали	
+Турция	exact	OSCAR MARMARIS	Oscar Hotel Marmaris	названия совпали	
+Турция	exact	ESMA CLOVE RESORT & SPA (EX. SUMELA GARDEN)	Esma Clove Resort & SPA	названия совпали	
+Турция	exact	MAGIC SUN	Magic Sun Hotel	названия совпали	
+Турция	exact	CITRUS PARK HOTEL	Citrus Park Hotel	названия совпали	
+Турция	exact	KOLIBRI	Kolibri	названия совпали	
+Турция	exact	SULTAN SIPAHI RESORT	Sultan Sipahi Resort	названия совпали	
+Турция	exact	PERRE DELTA (EX. GANITA DELTA RESORT)	Perre Delta Resort & SPA	названия совпали	
+Турция	exact	XENO EFTALIA RESORT (EX. EFTALIA RESORT)	Xeno Eftalia Resort	названия совпали	
+Турция	exact	TU CASA GELIDONYA (EX. NOVIA GELIDONYA)	Tu Casa Gelidonya Hotel	названия совпали	
+Турция	exact	FAME HOTEL	Fame Hotel	названия совпали	
+Турция	exact	THE MARILIS HILL RESORT HOTEL & SPA	The Marilis Hill Resort	названия совпали	
+Турция	exact	SUN CITY HOTEL & APARTMENTS	Sun City Apartments & Hotel	названия совпали	
+Турция	exact	VIKING PARK HOTEL	Viking Park Hotel & Spa	названия совпали	
+Турция	exact	CLUB MUNAMAR BEACH RESORT	Club Munamar Beach Resort	названия совпали	
+Турция	exact	SUN BEACH PARK & SPA	Sun Beach Park & Spa	названия совпали	
+Турция	exact	SUN BEACH HILL (EX. SIDE TOWN)	Sun Beach Hill	названия совпали	
+Турция	exact	KIRBIYIK RESORT HOTEL (EX. DINLER HOTEL)	Kirbiyik Resort Hotel	названия совпали	
+Турция	exact	ASDEM PARK	Asdem Park	названия совпали	
+Турция	exact	CLUB HOTEL SUNBEL	Club Hotel Sunbel	названия совпали	
+Турция	exact	SIRIUS	Sirius	названия совпали	
+Турция	exact	RIOS BEACH (EX. EGE MONTANA, INTERSPORT HOTEL)	Rios Beach Hotel	названия совпали	
+Турция	exact	RAMIRA BEACH HOTEL (EX. SUN MARITIM HOTEL)	Ramira Beach Hotel	названия совпали	
+Турция	exact	PARADOR SKY (EX. BIG BLUE SKY HOTEL)	Parador Sky Hotel	названия совпали	
+Турция	exact	BELENLI RESORT HOTEL	Belenli Resort Hotel	названия совпали	
+Турция	exact	GRAND VIKING	Grand Viking Hotel	названия совпали	
+Турция	exact	ALERIA BELPORT BEACH HOTEL	Aleria Belport Beach Hotel	названия совпали	
+Турция	exact	CONCORDIA CELES HOTEL	Concordia Celes Hotel	названия совпали	
+Турция	exact	PARADOR BEACH HOTEL	Parador Beach Hotel	названия совпали	
+Турция	exact	OBA TIME HOTEL	Oba Time Hotel	названия совпали	
+Турция	exact	ROSEIRA BEACH RESORT	Roseira Beach Resort	названия совпали	
+Турция	exact	OLIMPOS BEACH HOTEL BY RRH&R	Olimpos Beach Hotel by RRH&R	названия совпали	
+Турция	exact	SUN HEAVEN QUEEN (EX. CLUB SUN HEAVEN SEA BIRD BEACH)	Sun Heaven Queen	названия совпали	
+Турция	exact	BIENO VENUS (EX. VENUS HOTEL)	Bieno Venus Hotel & Spa	названия совпали	
+Турция	exact	MYRA	Myra	названия совпали	
+Турция	exact	OBA STAR HOTEL	Oba Star Hotel & Spa	названия совпали	
+Турция	exact	ANERISSA HOTEL	Anerissa Hotel	названия совпали	
+Турция	exact	ALDER GARDEN HOTEL (EX. ELDAR GARDEN)	Alder Garden Hotel	названия совпали	
+Турция	exact	ELAMIR RESORT HOTEL (EX. KEMER BOTANIK RESORT)	Elamir Resort Hotel	названия совпали	
+Турция	exact	ADLER HOTEL	Adler	названия совпали	
+Турция	exact	ASTORIA HOTEL & SPA	Astoria Hotel	названия совпали	
+Турция	exact	BODRUM BEACH RESORT	Bodrum Beach Resort	названия совпали	
+Турция	exact	PONZ	Ponz Hotel	названия совпали	
+Турция	exact	ASTORIA LIFE (EX. ASTORIA BEACH)	Astoria Life Hotel	названия совпали	
+Турция	exact	MIRAMOR GARDEN RESORT HOTEL (EX. SEKER RESORT)	Miramor Garden Resort	названия совпали	
+Турция	exact	ISTANBUL BEACH HOTEL (EX. BLAUHIMMEL HOTEL)	Istanbul Beach Hotel	названия совпали	
+Турция	exact	MC ARANCIA RESORT HOTEL	MC Arancia Resort Hotel	названия совпали	
+Турция	exact	VIKING BEACH (EX. BONN BEACH HOTEL BY RRH & R)	Viking Beach Hotel	названия совпали	
+Турция	exact	IDAS CLUB (EX. LIMA ICMELER)	Idas Club	названия совпали	
+Турция	exact	CLUB MERMAID VILLAGE	Club Mermaid Village	названия совпали	
+Турция	exact	RAMIRA JOY HOTEL (EX. ELITE ORKIDE SUITE)	Ramira Joy	названия совпали	
+Турция	exact	GOLDEN SUN HOTEL	Golden Sun	названия совпали	
+Турция	exact	SILVER	Silver Hotel	названия совпали	
+Турция	exact	ORFEUS QUEEN SPA	Orfeus Queen Hotel & Spa	названия совпали	
+Турция	exact	GRAND KOLIBRI PRESTIGE & SPA	Grand Kolibri Prestige & Spa	названия совпали	
+Турция	exact	SHERWOOD PREMIO (EX. SHERWOOD PRIZE HOTEL)	Sherwood Premio Hotel	названия совпали	
+Турция	exact	CLEOPATRA GOLDEN BEACH	Cleopatra Golden Beach Hotel	названия совпали	
+Турция	exact	AYDINBEY GOLD DREAMS	Aydinbey Gold Dreams	названия совпали	
+Турция	exact	GOLMAR BEACH	Golmar Beach	названия совпали	
+Турция	exact	IDAS HOTEL ADULTS ONLY 16+	Idas Hotel (16+)	названия совпали	
+Турция	exact	FAME BEACH HOTEL (EX. FAME RESIDENCE PARK)	Fame Beach Hotel	названия совпали	
+Турция	exact	BEACH CLUB DOGANAY	Beach Club Doganay	названия совпали	
+Турция	exact	CALIDO MARIS HOTEL	Calido Maris Hotel	названия совпали	
+Турция	exact	ALDER RESORT HOTEL (EX. ELDAR RESORT)	Alder Resort	названия совпали	
+Турция	exact	SOLIVIA HOTEL (EX. TITAN SELECT)	Solivia Hotel	названия совпали	
+Турция	exact	VIKING GARDEN HOTEL (EX. GARDEN RESORT BERGAMOT)	Viking Garden Hotel	названия совпали	
+Турция	exact	DRITA HOTEL	Drita Hotel Resort & Spa	названия совпали	
+Турция	exact	SUN HEAVEN HOTEL (EX. CLUB SUN HEAVEN FAMILY & SPA)	Sun Heaven Hotel	названия совпали	
+Турция	exact	ISLA PANORAMA (EX. IDEAL PANORAMA)	Isla Panorama	названия совпали	
+Турция	exact	FOREST IN HOTEL	Forest In Hotel	названия совпали	
+Турция	exact	GRAND MIRAMOR HOTEL & SPA	Grand Miramor Hotel	названия совпали	
+Турция	exact	AMBASSADOR PLAZA HOTEL	Ambassador Hotel Plaza	названия совпали	
+Турция	exact	ACROPOL BEACH	Acropol Beach	названия совпали	
+Турция	exact	OZKAYMAK INCEKUM	Ozkaymak Incekum Hotel	названия совпали	
+Турция	exact	ORFEUS PARK	Orfeus Park Hotel	названия совпали	
+Турция	exact	DRAGUT POINT NORTH	Dragut Point North Hotel	названия совпали	
+Турция	exact	SEAPHORIA BEACH RESORT	Seaphoria Beach Resort	названия совпали	
+Турция	exact	Q AVENTURA PARK	Q Aventura Park Hotel	названия совпали	
+Турция	exact	KEMER DREAM HOTEL	Kemer Dream Hotel	названия совпали	
+Турция	exact	MALHUN HOTEL	Malhun	названия совпали	
+Турция	exact	JUSTINIANO CLUB ALANYA	Justiniano Club Alanya	названия совпали	
+Турция	exact	AMON HOTELS	Amon Hotels Belek	подтверждено словарём синонимов	
+Турция	exact	ARORA HOTEL	Arora Hotel	названия совпали	
+Турция	exact	GRAND ZAMAN GARDEN	Grand Zaman Garden	названия совпали	
+Турция	exact	LAKE & RIVER SIDE HOTEL & SPA	Lake & River Side Hotel & Spa	названия совпали	
+Турция	exact	ANTIK BUTIK (EX. ANTIK HOTEL & GARDEN)	Antik Butik	названия совпали	
+Турция	exact	POINT BEACH HOTEL	Point Beach Hotel	названия совпали	
+Турция	exact	BITEZ GARDEN LIFE	Bitez Garden Life	названия совпали	
+Турция	exact	MASTER FAMILY CLUB (EX. ASKA COSTA HOLIDAY CLUB)	Master Family Club	названия совпали	
+Турция	exact	MONTEBELLO DELUXE	Montebello Deluxe Hotel	названия совпали	
+Турция	exact	ADALYA PORT HOTEL (EX. TUTAV ADALYA BOUTIQUE)	Adalya Port Hotel	названия совпали	
+Турция	exact	CAMPUS HILL HOTEL	Campus Hill Hotel	названия совпали	
+Турция	exact	VIKING STAR	Viking Star Hotel	названия совпали	
+Турция	exact	Q ELLA BEACH SIDE (EX. SIDE ORANGE PARADISE)	Q Ella Beach Side	названия совпали	
+Турция	exact	DEDEMAN KEMER RESORT (EX. CLUB JOVIA KEMER)	Dedeman Kemer Resort	названия совпали	
+Турция	exact	KARBEL HOTEL	Karbel Hotel	названия совпали	
+Турция	exact	ARMAS GREEN FUGLA BEACH (EX. CLUB GREEN FUGLA BEACH)	Armas Green Fugla Beach	подтверждено словарём синонимов	
+Турция	exact	ARMAS BELLA SUN (EX. CLUB BELLA SUN HOTEL & SPA)	Armas Bella Sun	названия совпали	
+Турция	exact	VIKING NONA BEACH	Viking Nona Beach Hotel	названия совпали	
+Турция	exact	MAYA WORLD PARK (EX. IQ BELEK)	Maya World Park	названия совпали	
+Турция	exact	BUYUK HOTEL	Buyuk Hotel	названия совпали	
+Турция	exact	THE LUMOS DELUXE RESORT HOTEL & SPA	The Lumos Deluxe Resort Hotel & Spa	названия совпали	
+Турция	exact	ARMAS GUL BEACH (EX. OTIUM GUL)	Armas Gul Beach	названия совпали	
+Турция	exact	FLEUR BAY RESORT (EX. CACTUS FLEUR BEACH)	Fleur Bay Resort	названия совпали	
+Турция	exact	LINDA SUNNY BEACH HOTEL SPA (EX. BIENO CLUB SUNSET)	Linda Sunny Beach Hotel	названия совпали	
+Турция	exact	ALAN XAFIRA DELUXE RESORT & SPA	Alan Xafira Deluxe Resort & Spa	названия совпали	
+Турция	exact	ARMAS KAPLAN PARADISE (EX. KAPLAN PARADISE, JEANS CLUB KAPLAN)	Armas Kaplan Paradise	названия совпали	
+Турция	exact	SIDE AMOUR HOTEL	Side Amour Hotel	названия совпали	
+Турция	exact	OZKAYMAK SELECT RESORT (EX. OZKAYMAK FAMILY SELECT RESORT)	Ozkaymak Select Resort	названия совпали	
+Турция	exact	LAGUNA BEACH ALYA RESORT & SPA	Laguna Beach Alya Resort & Spa	названия совпали	
+Турция	exact	ARMAS BEACH HOTEL	Armas Beach	названия совпали	
+Турция	exact	DRAGUT POINT SOUTH	Dragut Point South Hotel	названия совпали	
+Турция	exact	AVIA RESORT & SPA	Avia Resort & Spa	названия совпали	
+Турция	exact	DIAMOND HILL RESORT	Diamond Hill Resort	названия совпали	
+Турция	exact	RING BEACH HOTEL	Ring Beach	названия совпали	
+Турция	exact	HOLIDAY GARDEN RESORT	Holiday Garden Resort	названия совпали	
+Турция	exact	HOLIDAY PARK RESORT	Holiday Park Resort	названия совпали	
+Турция	exact	TUVANA	Tuvana Hotel	названия совпали	
+Турция	exact	ARMAS PEMAR BEACH (EX. PEMAR BEACH)	Armas Pemar Beach	названия совпали	
+Турция	exact	PORT RIVER HOTEL & SPA	Port River Hotel & Spa	названия совпали	
+Турция	exact	OZKAYMAK MARINA	Ozkaymak Marina Hotel	названия совпали	
+Турция	exact	PERRE LA MER RESORT & SPA	Perre La Mer Hotel	названия совпали	
+Турция	exact	ARCADIA OF BODRUM	Arcadia Of Bodrum	названия совпали	
+Турция	exact	GREEN ANATOLIA CLUB & HOTEL	Green Anatolia Club & Hotel	названия совпали	
+Турция	exact	AYDINBEY QUEENS PALACE & SPA	Aydinbey Queen`s Palace & Spa	названия совпали	
+Турция	exact	INCEKUM WEST HOTEL (EX. MIAROSA INCEKUM WEST)	Incekum West	названия совпали	
+Турция	exact	SELCUKHAN HOTEL	Selcukhan	названия совпали	
+Турция	exact	X LIFE HOTEL (EX. OTIUM SENSES X LIFE HOTELS)	X Life Hotel	названия совпали	
+Турция	exact	SEA GULL	Seagull Hotel	названия совпали	
+Турция	exact	LOWE HOTEL	Lowe Hotel	названия совпали	
+Турция	exact	ALARCHA HOTELS & RESORTS	Alarcha Hotels & Resort	названия совпали	
+Турция	exact	TONOZ BEACH	Tonoz Beach	названия совпали	
+Турция	exact	OZKAYMAK FALEZ HOTEL	Ozkaymak Falez Hotel	названия совпали	
+Турция	exact	MARCAN BEACH	Marcan Beach Hotel (Adults Only 16+)	названия совпали	
+Турция	exact	CLUB HOTEL BELPINAR	Club Hotel Belpinar	названия совпали	
+Турция	exact	KAHYA RESORT AQUA & SPA	Kahya Resort Aqua & Spa	названия совпали	
+Турция	exact	AKDENIZ BEACH	Akdeniz Beach	названия совпали	
+Турция	exact	WATER SIDE RESORT & SPA	Water Side Resort & Spa	названия совпали	
+Турция	exact	VICTORY RESORT HOTEL	Victory Hotel Spa	названия совпали	
+Турция	exact	WASHINGTON RESORT & SPA (EX. ASKA WASHINGTON RESORT & SPA)	Washington Resort Hotel & Spa	названия совпали	
+Турция	exact	SOLANA BY YELKEN (EX. YELKEN MANDALINCI SPA & WELLNESS)	Solana By Yelken	названия совпали	
+Турция	exact	JUSTINIANO CLUB PARK CONTI	Justiniano Club Park Conti	названия совпали	
+Турция	exact	GRAND RING	Grand Ring	названия совпали	
+Турция	exact	KAYA MARIS HOTEL	Kaya Maris Hotel	названия совпали	
+Турция	exact	MANDARIN RESORT	Mandarin Resort	названия совпали	
+Турция	exact	AKRA V (EX. BARUT AKRA PARK)	Akra V	названия совпали	
+Турция	exact	SIDE MOON PALACE HOTEL	Side Moon Palace Hotel	названия совпали	
+Турция	exact	SUPREME BEACH (EX. MUNAMAR BEACH RESIDENCE) ADULTS ONLY	Supreme Beach Hotel	названия совпали	
+Турция	exact	CRYSTAL PARAISO AQUA COLLECTION (EX. CRYSTAL PARAISO VERDE RESORT & SPA)	Crystal Paraiso Aqua Collection	названия совпали	
+Турция	exact	LABRANDA ALANTUR HOTEL (EX. MARITIM CLUB)	Labranda Alantur	названия совпали	
+Турция	exact	JADORE DELUXE HOTEL & SPA	J’adore Deluxe Hotel & Spa	названия совпали	
+Турция	exact	OKALIPTUS HOTEL	Okaliptus Hotel	названия совпали	
+Турция	exact	OZ HOTELS SUI (EX. SUI RESORT)	Oz Hotels Sui Resort	названия совпали	
+Турция	exact	FORTEZZA BEACH RESORT (EX. MARMARIS RESORT & SPA)	Fortezza Beach Resort	названия совпали	
+Турция	exact	JUSTINIANO DELUXE RESORT	Justiniano Deluxe Resort Hotel	названия совпали	
+Турция	exact	ALIZE HOTEL	Alize	названия совпали	
+Турция	exact	MY HOME RESORT	My Home Resort Hotel	названия совпали	
+Турция	exact	BENDIS BEACH	Bendis Beach Hotel	названия совпали	
+Турция	exact	LINDA RESORT	Linda Resort	названия совпали	
+Турция	exact	FLAMINGO HOTEL	Flamingo Hotel	названия совпали	
+Турция	exact	VICTORY VOLARE HOTEL	Victory Volare Hotel	названия совпали	
+Турция	exact	VICTORY BE MINE	Victory Be Mine Hotel	названия совпали	
+Турция	exact	SAMI BEACH	Sami Beach Hotel	названия совпали	
+Турция	exact	TERRACE ELITE RESORT	Terrace Elite Resort	названия совпали	
+Турция	exact	SENTIDO LYCUS BEACH	Sentido Lycus Beach Hotel	названия совпали	
+Турция	exact	GALERI RESORT	Galeri Resort Hotel	названия совпали	
+Турция	exact	ROX RESORT (EX. ROX ROYAL)	Rox Resort Hotel	названия совпали	
+Турция	exact	CRYSTAL ADMIRAL AQUA COLLECTION (EX. CRYSTAL ADMIRAL RESORT SUITES & SPA)	Crystal Admiral Aqua Collection	названия совпали	
+Турция	exact	ARNOR DE LUXE HOTEL & SPA	Arnor De Luxe Hotel & Spa	названия совпали	
+Турция	exact	ROYAL GARDEN BEACH HOTEL (EX. ROYAL GARDEN SELECT & SUITE)	Royal Garden Beach Hotel	названия совпали	
+Турция	exact	ANNABELLA DIAMOND HOTEL & SPA	Annabella Diamond Hotel & Spa	названия совпали	
+Турция	exact	GOLDEN LOTUS	Golden Lotus	названия совпали	
+Турция	exact	GOLDEN BEACH RESORT & SPA	Golden Beach Resort & Spa	названия совпали	
+Турция	exact	TRANSATLANTIK BEACH (EX. ASDEM BEACH)	Transatlantik Hotel & Spa	названия совпали	
+Турция	exact	GLAMOUR RESORT & SPA	Glamour Resort & Spa	названия совпали	
+Турция	exact	ROSEIRA MAR-INN LUXURY	Roseira Mar-Inn Luxury	названия совпали	
+Турция	exact	UNIQUE RESIDENCE HOTEL GOLF & SPA (EX. WYNDHAM RESIDENCES KUSADASI GOLF & SPA)	Unique Residence Golf & Spa	названия совпали	
+Турция	exact	HORUS PARADISE LUXURY RESORT	Horus Paradise Luxury Resort	названия совпали	
+Турция	exact	CRYSTAL WATERWORLD AQUA COLLECTION (EX. CRYSTAL WATERWORLD RESORT & SPA)	Crystal Waterworld Aqua Collection	названия совпали	
+Турция	exact	PALEMON RESORT & SPA	Palemon Resort & Spa	названия совпали	
+Турция	exact	OZ HOTELS INCEKUM BEACH HOTEL	OZ Hotels Incekum Beach Resort	названия совпали	
+Турция	exact	GRAND EFE	Club Hotel Grand Efe (Ozdere)	названия совпали	
+Турция	exact	Q PREMIUM RESORT	Q Premium Resort	названия совпали	
+Турция	exact	DIAMOND OF BODRUM	Diamond Of Bodrum	названия совпали	
+Турция	exact	GUMBET ANIL BEACH	Gumbet Anil Beach	названия совпали	
+Турция	exact	MERYAN	Meryan Hotel	названия совпали	
+Турция	exact	MAYA WORLD HOTEL DIDYMA (EX. ADA WORLD HOTEL DIDYMA)	Maya World Didyma Hotel	названия совпали	
+Турция	exact	SURAL GARDEN	Sural Garden	названия совпали	
+Турция	exact	SIAM ELEGANCE HOTELS & SPA	Siam Elegance Hotel & Spa	названия совпали	
+Турция	exact	AQI PEGASOS CLUB	AQI Pegasos Club	названия совпали	
+Турция	exact	THE ONE CLUB HOTEL (EX. ALINN CLUB HOTEL)	The One Club Hotel	названия совпали	
+Турция	exact	PRIME BEACH HOTEL (EX. IDEAL PRIME BEACH)	Prime Beach Hotel	названия совпали	
+Турция	exact	LOCEANICA BEACH RESORT HOTEL	L'Oceanica Beach Resort Hotel	названия совпали	
+Турция	exact	AZURE BY YELKEN	Azure by Yelken	названия совпали	
+Турция	exact	BLUE BAY STYLE (EX. SESIN)	Blue Bay Style	названия совпали	
+Турция	exact	ARMAS LABADA (EX. ASDEM LABADA BEACH)	Armas Labada	названия совпали	
+Турция	exact	CLUB KASTALIA HOLIDAY VILLAGE	Club Kastalia Holiday Village	названия совпали	
+Турция	exact	ROYAL ATLANTIS SPA & RESORT	Royal Atlantis Spa & Resort	названия совпали	
+Турция	exact	LUCIDA BEACH HOTEL	Lucida Beach Hotel	названия совпали	
+Турция	exact	GRAND PARK LARA	Grand Park Lara	названия совпали	
+Турция	exact	FANTASIA DE LUXE	Fantasia Hotel De Luxe	названия совпали	
+Турция	exact	CRYSTAL AURA AQUA COLLECTION (EX. CRYSTAL AURA BEACH RESORT & SPA)	Crystal Aura Aqua Collection	названия совпали	
+Турция	exact	OZ HOTELS SIDE PREMIUM	Oz Hotels Side Premium	названия совпали	
+Турция	exact	HOTEL TURAN PRINCE (EX. SENTIDO TURAN PRINCE)	Hotel Turan Prince	названия совпали	
+Турция	exact	QUEENS PARK RESORT GOYNUK	Queen`s Park Goynuk	названия совпали	
+Турция	exact	SYMBOLA OLUDENIZ BEACH HOTEL	Symbola Oludeniz Beach Hotel	названия совпали	
+Турция	exact	ROYAL ASARLIK BEACH & SPA	Royal Asarlik Beach	названия совпали	
+Турция	exact	SUNDIA BY LIBERTY SUNCITY (EX. SUN CITY HOTEL & BEACH CLUB)	Sundia By Liberty Suncity	названия совпали	
+Турция	exact	LONICERA PREMIUM	Lonicera Premium	названия совпали	
+Турция	exact	CESARS SIDE (EX.CESARS RESORT)	Cesars Side	названия совпали	
+Турция	exact	SY HOTELS BELEK	SY Hotels Belek	названия совпали	
+Турция	exact	HILLSTONE BODRUM HOTEL & SPA (EX. GRAND YAZICI BODRUM)	Hillstone Bodrum Hotel & Spa	названия совпали	
+Турция	exact	ANADOLU HOTELS DIDIM CLUB (EX. ADRINA BEACH RESORT)	Anadolu Hotels Didim Club	названия совпали	
+Турция	exact	ROYAL ATLANTIS ICON	Royal Atlantis Icon	названия совпали	
+Турция	exact	GREENWOOD KEMER RESORT	Greenwood Kemer Resort	названия совпали	
+Турция	exact	GREEN GARDEN RESORT HOTEL	Green Garden Resort & Spa	названия совпали	
+Турция	exact	BERRY BLUE (EX. BERRY HOTELS SORGUN)	Berry Blue Hotel	названия совпали	
+Турция	exact	MARVIDA FAMILY ECO (EX. OTIUM FAMILY ECO CLUB)	Marvida Family Eco	названия совпали	
+Турция	exact	SEALIFE BUKET BEACH (EX. ASKA BUKET RESORT & SPA)	Sealife Buket Resort & Beach	названия совпали	
+Турция	exact	SAPHIR HOTEL & VILLAS	Saphir Hotel & Villas	названия совпали	
+Турция	exact	PIRATES BEACH CLUB	Pirate's Beach Club	названия совпали	
+Турция	exact	DIAMOND PREMIUM	Diamond Premium Hotel & Spa	названия совпали	
+Турция	exact	AQI PEGASOS RESORT	Aqi Pegasos Resort	названия совпали	
+Турция	exact	ZENA RESORT HOTEL	Zena Resort Hotel	названия совпали	
+Турция	exact	CRYSTAL SUNSET PEARL COLLECTION (EX. CRYSTAL SUNSET LUXURY RESORT & SPA)	Crystal Sunset Pearl Collection	названия совпали	
+Турция	exact	IMPERIAL TURKIZ RESORT HOTEL	Imperial Turkiz Resort Hotel	названия совпали	
+Турция	exact	TERRACE BEACH RESORT	Terrace Beach Resort	названия совпали	
+Турция	exact	MERCURE ANTALYA BELEK	Mercure Antalya Belek	названия совпали	
+Турция	exact	GRAND KAPTAN	Grand Kaptan	названия совпали	
+Турция	exact	GRAND BLUE SKY	Grand Blue Sky	названия совпали	
+Турция	exact	CLUB HOTEL TURAN PRINCE WORLD	Club Hotel Turan Prince World	названия совпали	
+Турция	exact	ASKA JUST IN BEACH	Aska Just in Beach	названия совпали	
+Турция	exact	LONG BEACH CLUB NATURE (EX. ASTERIA EROS DIDIM, THE ROXY LUXURY NATURE)	Long Beach Club Nature	названия совпали	
+Турция	exact	BODRUM HOLIDAY RESORT & SPA	Bodrum Holiday Resort & Spa	названия совпали	
+Турция	exact	AQI PEGASOS ROYAL HOTEL (EX. TT HOTELS PEGASOS ROYAL)	AQI Pegasos Royal	названия совпали	
+Турция	exact	SIDE PRENSES RESORT & SPA	Side Prenses Resort & Spa	названия совпали	
+Турция	exact	DOSINIA LUXURY RESORT	Dosinia Luxury Resort	названия совпали	
+Турция	exact	GREENWOOD SUITES RESORT (EX. SHERWOOD SUITES RESORT)	Greenwood Suites Resort	названия совпали	
+Турция	exact	LALILA BLUE SUITES (EX. KALEMCI)	Lalila Blue Suites	названия совпали	
+Турция	exact	CRYSTAL PRESTIGE PEARL COLLECTION (EX. CRYSTAL PRESTIGE ELITE HOTEL)	Crystal Prestige Pearl Collection	названия совпали	
+Турция	exact	SURAL HOTEL	Sural	названия совпали	
+Турция	exact	SIDE ALUNA (EX. DIAMOND BEACH HOTEL)	Side Aluna Hotel	названия совпали	
+Турция	exact	MY ELLA BODRUM RESORT & SPA (EX. KAIRABA BODRUM PRINCESS)	My Ella Bodrum Resort & Spa	названия совпали	
+Турция	exact	SUNIS ELITA BEACH RESORT (EX. ASTERIA ELITA RESORT)	Sunis Elita Beach Resort Hotel & Spa	названия совпали	
+Турция	exact	QUEENS PARK LE JARDIN (EX. LE JARDIN RESORT)	Queen`s Park Le Jardin	названия совпали	
+Турция	exact	GREEN BAY RESORT (EX. CRYSTAL GREEN BAY RESORT & SPA)	Green Bay Resort & Spa	названия совпали	
+Турция	exact	WHITE CITY RESORT	White City Resort Hotel	названия совпали	
+Турция	exact	CRYSTAL FAMILY COMFORT COLLECTION (EX. CRYSTAL FAMILY RESORT & SPA)	Crystal Family Comfort Collection	названия совпали	
+Турция	exact	SEALIFE FAMILY RESORT (EX. SEA LIFE RESORT&SPA)	Sealife Family Resort Hotel	названия совпали	
+Турция	exact	WYNDHAM GARDEN LARA (EX. LARA FAMILY CLUB)	Wyndham Garden Lara	названия совпали	
+Турция	exact	IC HOTELS AIRPORT	IC Hotels Airport	названия совпали	
+Турция	exact	CRYSTAL TAT BEACH PEARL COLLECTION (EX. CRYSTAL TAT BEACH GOLF RESORT & SPA)	Crystal Tat Beach Pearl Collection	названия совпали	
+Турция	exact	RICHMOND EPHESUS	Richmond Ephesus	названия совпали	
+Турция	exact	LABRANDA TMT BODRUM RESORT (EX. VERA MIRAMAR)	Labranda TMT Bodrum	названия совпали	
+Турция	exact	SALMAKIS RESORT & SPA	Salmakis Resort & Spa	названия совпали	
+Турция	exact	SAPHIR RESORT & SPA	Saphir Resort & Spa	названия совпали	
+Турция	exact	EMELDA SUN CLUB (EX. SIMENA SUN CLUB)	Emelda Sun Club	названия совпали	
+Турция	exact	DELTA HOTEL BY MARRIOTT BODRUM (EX. DELTA BEACH RESORT)	Delta Hotels By Marriott Bodrum	названия совпали	
+Турция	exact	STARLIGHT RESORT (EX. STARLIGHT CONVENTION CENTER THALASSO & SPA)	Starlight Resort Hotel	названия совпали	
+Турция	exact	SUNRISE RESORT & SPA	Sunrise Resort Hotel	названия совпали	
+Турция	exact	KUSTUR CLUB HOLIDAY VILLAGE (EX. MAJESTY CLUB KUSTUR)	Kustur Club Holiday Village	названия совпали	
+Турция	exact	MARTI LA PERLA ADULTS ONLY 16+	Marti La Perla (16+)	названия совпали	
+Турция	exact	CHARM BEACH	Charm Beach	названия совпали	
+Турция	exact	BLUE MARLIN DELUXE SPA & RESORT	Blue Marlin Deluxe Spa & Resort	названия совпали	
+Турция	exact	CLUB HOTEL RAMA	Club Hotel Rama	названия совпали	
+Турция	exact	AQI PEGASOS WORLD	AQI Pegasos World	названия совпали	
+Турция	exact	MONTEBELLO RESORT	Montebello Resort Hotel	названия совпали	
+Турция	exact	AGAYA DIDIM RESORT (EX. PRIVE HOTEL DIDIM)	Agaya Didim Resort Hotel	названия совпали	
+Турция	exact	ORKA LOTUS BEACH	Orka Lotus Beach	названия совпали	
+Турция	exact	SEALIFE KEMER RESORT (EX. SEALIFE ROSE RESIDENCE)	Sealife Kemer Resort	названия совпали	
+Турция	exact	SUNDIA BY LIBERTY OLUDENIZ (EX. LIBERTY HOTEL OLUDENIZ)	Sundia By Liberty Oludeniz	названия совпали	
+Турция	exact	CLUB MARCO POLO	Club Marco Polo	названия совпали	
+Турция	exact	ADALYA ART SIDE (EX. GRAND HOTEL ARTSIDE)	Adalya Artside	названия совпали	
+Турция	exact	HAYDARPASHA PALACE	Haydarpasha Palace	названия совпали	
+Турция	exact	ROYAL ALHAMBRA PALACE	Royal Alhambra Palace	названия совпали	
+Турция	exact	SHERWOOD DREAMS RESORT	Sherwood Dreams Resort	названия совпали	
+Турция	exact	MEGASARAY WESTBEACH ANTALYA (EX. HARRINGTON PARK RESORT)	Megasaray WestBeach Antalya	названия совпали	
+Турция	exact	PORTO BELLO	Porto Bello Hotel Resort & Spa	названия совпали	
+Турция	exact	THE X BELEK	The X Belek	названия совпали	
+Турция	exact	RAI FORESTA TEKIROVA (EX. CLUB SAPHIRE)	Rai Foresta Tekirova	названия совпали	
+Турция	exact	CLUB HOTEL PHASELIS ROSE	Club Hotel Phaselis Rose	названия совпали	
+Турция	exact	SIU COLLECTION	Siu Collection	названия совпали	
+Турция	exact	AQUA FANTASY AQUAPARK HOTEL & SPA	Aqua Fantasy Aquapark Hotel & Spa	подтверждено словарём синонимов	
+Турция	exact	CRYSTAL FLORA PEARL COLLECTION (EX. CRYSTAL FLORA BEACH RESORT)	Crystal Flora Pearl Collection	названия совпали	
+Турция	exact	YASMIN BODRUM RESORT (EX. PALOMA YASMIN RESORT)	Yasmin Bodrum Resort	названия совпали	
+Турция	exact	MEGASARAY RESORT SIDE (EX. ASKA SIDE HOTEL)	Megasaray Resort Side	названия совпали	
+Турция	exact	MARTI MYRA	Marti Myra	названия совпали	
+Турция	exact	SURAL RESORT	Sural Resort Hotel	названия совпали	
+Турция	exact	DIAMOND EXCELLENCE RESORT & SPA (EX. CRYSTAL PALACE LUXURY)	Diamond Excellence Resort & Spa	названия совпали	
+Турция	exact	BEKS PREMIUM RESORT & SPA	Beks Premium Resort & Spa	названия совпали	
+Турция	exact	CRYSTAL CENTRO PEARL COLLECTION	Crystal Centro Pearl Collection	названия совпали	
+Турция	exact	CORENDON HYDROS CLUB KEMER (EX. AQI HYDROS CLUB)	Corendon Hydros Club Kemer	названия совпали	
+Турция	exact	KILIKYA PALACE GOYNUK	Kilikya Palace Goynuk	названия совпали	
+Турция	exact	CALYPTUS KIRMAN PREMIUM	Calyptus Kirman Premium	названия совпали	
+Турция	exact	SIDERA KIRMAN PREMIUM	Sidera Kirman Premium	названия совпали	
+Турция	exact	CORENDON PLAYA KEMER (EX. GRAND PARK KEMER)	Corendon Playa Kemer	названия совпали	
+Турция	exact	AKKA ALINDA HOTEL	AKKA Alinda	названия совпали	
+Турция	exact	JUJU PREMIER PALACE (EX. AMARA PREMIER PALACE)	Juju Premier Palace	названия совпали	
+Турция	exact	PALOMA SENCIA (EX. CORNELIA DE LUXE)	Paloma Sencia	названия совпали	
+Турция	exact	KORUMAR HOTEL DELUXE	Korumar Deluxe Hotel	названия совпали	
+Турция	exact	TURQUOISE RESORT HOTEL & SPA	Turquoise Hotel	названия совпали	
+Турция	exact	SUNIS EFES ROYAL PALACE RESORT & SPA	Sunis Efes Royal Palace Resort & Spa (Ozdere)	названия совпали	
+Турция	exact	ASKA LARA RESORT & SPA	Aska Lara Resort & Spa	названия совпали	
+Турция	exact	TUI BLUE MAVISS	Tui Blue Maviss	названия совпали	
+Турция	exact	BAIA SALIMA KEMER (EX. BAIA KEMER CLUB)	Baia Salima Kemer	названия совпали	
+Турция	exact	MOVENPICK HOTEL ANTALYA TEKIROVA (EX.ROYAL DIWA TEKIROVA RESORT)	Movenpick Resort Antalya Tekirova	названия совпали	
+Турция	exact	ROYAL DRAGON	Royal Dragon Hotel	названия совпали	
+Турция	exact	BASKA RESORT BODRUM (EX. HOLIDAY INN RESORT BODRUM)	Baska Resort Bodrum	названия совпали	
+Турция	exact	BELCONTI RESORT	Belconti Resort Hotel	названия совпали	
+Турция	exact	KEFALUKA RESORT	Kefaluka Resort	названия совпали	
+Турция	exact	DOBEDAN BEACH RESORT COMFORT (EX. ALVA DONNA BEACH RESORT COMFORT)	Dobedan Beach Resort Comfort	названия совпали	
+Турция	exact	ARYCANDA KIRMAN PREMIUM	Arycanda Kirman Premium	названия совпали	
+Турция	exact	LEODIKYA KIRMAN PREMIUM (EX. KIRMAN LEODIKYA RESORT)	Leodikya Kirman Premium	названия совпали	
+Турция	exact	SIDEMARIN KIRMAN PREMIUM	Sidemarin Kirman Premium	названия совпали	
+Турция	exact	SPICE HOTEL & SPA	Spice Hotel & Spa	названия совпали	
+Турция	exact	BOTANIK HOTEL & RESORT (EX. DELPHIN BOTANIK WORLD OF PARADISE)	Botanik Hotel & Resort	названия совпали	
+Турция	exact	CLUB TUANA FETHIYE (EX. MAJESTY CLUB TUANA PARK)	Club Tuana Fethiye	названия совпали	
+Турция	exact	SAILORS BEACH CLUB	Sailor`s Beach Club	названия совпали	
+Турция	exact	CLUB HOTEL SERA	Club Hotel Sera	названия совпали	
+Турция	exact	IC HOTELS SANTAI FAMILY RESORT	IC Hotels Santai Family Resort	названия совпали	
+Турция	exact	ROYAL SEGINUS	Royal Seginus	названия совпали	
+Турция	exact	DOUBLETREE BY HILTON BODRUM ISIL CLUB RESORT	DoubleTree By Hilton Bodrum Isil Club Resort	названия совпали	
+Турция	exact	RAI PREMIUM TEKIROVA (EX. QUEENS PARK TEKIROVA)	Rai Premium Tekirova	названия совпали	
+Турция	exact	MIRACLE RESORT	Miracle Resort Hotel	названия совпали	
+Турция	exact	FASHIONTV LUXE RESORT	FashionTV Luxe Resort	названия совпали	
+Турция	exact	PORT NATURE LUXURY RESORT HOTEL & SPA	Port Nature Luxury Resort Hotel & Spa	названия совпали	
+Турция	exact	ROYAL HOLIDAY PALACE	Royal Holiday Palace	названия совпали	
+Турция	exact	KIRMAN BELAZUR RESORT & SPA	Kirman Belazur Resort & Spa	названия совпали	
+Турция	exact	TUI MAGIC LIFE BELEK (EX. CLUB ASTERIA BELEK)	TUI Magic Life Belek	названия совпали	
+Турция	exact	BELEK BEACH RESORT	Belek Beach Resort Hotel	названия совпали	
+Турция	exact	LIMAK LIMRA HOTEL & RESORT	Limak Limra Hotel & Resort	названия совпали	
+Турция	exact	MARTI RESORT	Marti Resort	названия совпали	
+Турция	exact	BLUE WATERS CLUB & RESORT	Blue Waters Club	названия совпали	
+Турция	exact	PINE BEACH BELEK (EX. MARITIM PINE BEACH RESORT)	Pine Beach Belek	названия совпали	
+Турция	exact	ADALYA OCEAN DELUXE	Adalya Ocean Deluxe	названия совпали	
+Турция	exact	SIANJI WELLBEING RESORT (EX. GARDENS OF BABYLON BOUTIQUE)	Sianji Well-Being Resort	названия совпали	
+Турция	exact	IC HOTELS GREEN PALACE	IC Hotels Green Palace	названия совпали	
+Турция	exact	TUI MAGIC LIFE MASMAVI (EX. ROBINSON CLUB MASMAVI)	TUI Magic Life Masmavi	названия совпали	
+Турция	exact	DOBEDAN EXCLUSIVE HOTEL & SPA (EX. ALVA DONNA EXCLUSIVE)	Dobedan Exclusive Hotel & Spa	названия совпали	
+Турция	exact	SHERWOOD EXCLUSIVE LARA (EX. SHERWOOD BREEZES RESORT & BEACH)	Sherwood Exclusive Lara	названия совпали	
+Турция	exact	SWANDOR HOTELS & RESORTS TOPKAPI PALACE (EX. WOW TOPKAPI PALACE)	Swandor Hotels & Resorts Topkapi Palace	названия совпали	
+Турция	exact	LA BLANCHE RESORT	La Blanche Resort & SPA	названия совпали	
+Турция	exact	SHERWOOD EXCLUSIVE KEMER (EX. SHERWOOD CLUB, MAJESTY CLUB)	Sherwood Exclusive Kemer	названия совпали	
+Турция	exact	LA QUINTA BY WYNDHAM BODRUM (Ex. MAVI KUMSAL)	La Quinta by Wyndham Bodrum	названия совпали	
+Турция	exact	FLORA GARDEN EPHESUS (EX. CLUB MERSIN BEACH)	Flora Garden Ephesus	названия совпали	
+Турция	exact	MIRAMARE QUEEN HOTEL	Miramare Queen	названия совпали	
+Турция	exact	KORUMAR EPHESUS SPA & BEACH RESORT	Korumar Ephesus Beach & Spa Resort	названия совпали	
+Турция	exact	UNIQUE LIFE STYLE HOTEL	Unique Life Style	названия совпали	
+Турция	exact	SEVEN SEAS HOTEL LIFE (EX. OTIUM HOTEL LIFE)	Seven Seas Hotel Life	названия совпали	
+Турция	exact	PALOMA PERISSIA	Paloma Perissia	названия совпали	
+Турция	exact	BELLIS DELUXE HOTEL	Bellis Deluxe Hotel	названия совпали	
+Турция	exact	PALOMA OCEANA RESORT	Paloma Oceana	названия совпали	
+Турция	exact	TUI BLUE SHERWOOD BELEK ADULTS ONLY	TUI Blue Sherwood Belek	названия совпали	
+Турция	exact	TUI BLUE PALM GARDEN	TUI BLUE Palm Garden	названия совпали	
+Турция	exact	LIMAK LARA DE LUXE HOTEL & RESORT	Limak Lara De Luxe Hotel & Resort	названия совпали	
+Турция	exact	XANADU RESORT HOTEL	Xanadu Resort Hotel	названия совпали	
+Турция	exact	MEGASARAY CLUB BELEK	Megasaray Club Belek	названия совпали	
+Турция	exact	HAPIMAG SEA GARDEN	Hapimag Sea Garden Resort	названия совпали	
+Турция	exact	RADISSON COLLECTION BODRUM	Radisson Collection Bodrum	названия совпали	
+Турция	exact	PAPILLON BELVIL	Papillon Belvil	названия совпали	
+Турция	exact	TUI MAGIC LIFE SARIGERME	Tui Magic Life Sarigerme	названия совпали	
+Турция	exact	MIRAMARE BEACH	Miramare Beach Hotel	названия совпали	
+Турция	exact	SUSESI LUXURY RESORT	Susesi Luxury Resort	названия совпали	
+Турция	exact	TRENDY PERGE RESORT & SUITES	Trendy Perge Resort & Suites	названия совпали	
+Турция	exact	PAPILLON AYSCHA	Papillon Ayscha	названия совпали	
+Турция	exact	ADALYA ELITE LARA	Adalya Elite Lara Hotel	названия совпали	
+Турция	exact	AKRA FETHIYE TUI BLUE SENSATORI (EX. TUI BLUE SENSATORI BARUT FETHIYE)	Akra Fethiye Tui Blue Sensatori	названия совпали	
+Турция	exact	PAPILLON ZEUGMA RELAXURY	Papillon Zeugma Relaxury	названия совпали	
+Турция	exact	THE NORM COLLECTION DOORA (EX. SELECTUM DOORA BODRUM)	The Norm Collection Door'a	названия совпали	
+Турция	exact	ROBINSON PAMFILYA	Robinson Club Pamfilya	названия совпали	
+Турция	exact	AKKA ANTEDON HOTEL	Akka Antedon	названия совпали	
+Турция	exact	TUI BLUE GRAND AZUR (EX. GRAND AZUR MARMARIS)	TUI BLUE Grand Azur	названия совпали	
+Турция	exact	PALOMA ORENDA RESORT	Paloma Orenda Resort	названия совпали	
+Турция	exact	LIU RESORTS	Liu Resorts	названия совпали	
+Турция	exact	AKRA KEMER (EX. KEMER BARUT COLLECTION)	Akra Kemer	названия совпали	
+Турция	exact	NIRVANA COSMOPOLITAN	Nirvana Cosmopolitan Hotel	названия совпали	
+Турция	exact	DOUBLETREE BY HILTON ANTALYA KEMER	DoubleTree by Hilton Antalya Kemer	названия совпали	
+Турция	exact	SIRENE BELEK HOTEL	Sirene Belek Hotel	названия совпали	
+Турция	exact	RIXOS PARK BELEK THE LAND OF LEGENDS FREE ACCESS	Rixos Park Belek The Land of Legends free access	названия совпали	
+Турция	exact	MARDAN PALACE	Mardan Palace	названия совпали	
+Турция	exact	PALOMA PASHA RESORT	Paloma Pasha (Ozdere)	названия совпали	
+Турция	exact	CLUB & HOTEL LETOONIA	Letoonia Club & Hotel	названия совпали	
+Турция	exact	MIRAGE PARK RESORT (EX. MAJESTY MIRAGE PARK)	Mirage Park Resort	названия совпали	
+Турция	exact	MYLOME LUXURY HOTEL & RESORT	Mylome Luxury Hotel & Resort	названия совпали	
+Турция	exact	THE PLAZA HOTEL BODRUM (EX. BE PREMIUM BODRUM)	The Plaza Bodrum	названия совпали	
+Турция	exact	SUNIS EVREN BEACH RESORT & SPA	Sunis Evren Beach Resort	названия совпали	
+Турция	exact	ROYAL TAJ MAHAL HOTEL	Royal Taj Mahal	названия совпали	
+Турция	exact	LE MERIDIEN BODRUM RESORT (EX. LUX BODRUM)	Le Meridien Bodrum Beach Resort	названия совпали	
+Турция	exact	MIRADA EXCLUSIVE BODRUM	Mirada Exclusive Bodrum	названия совпали	
+Турция	exact	ANDA BARUT COLLECTION	Anda Barut Collection	названия совпали	
+Турция	exact	VOGUE HOTEL SUPREME BODRUM	Vogue Hotel Supreme Bodrum	названия совпали	
+Турция	exact	PALOMA FINESSE SIDE	Paloma Finesse Side	названия совпали	
+Турция	exact	CONCORDE DE LUXE RESORT	Concorde De Luxe Resort	названия совпали	
+Турция	exact	RIXOS SUNGATE THE LAND OF LEGENDS FREE ACCESS	Rixos Sungate - The Land Of Legends Free Access	названия совпали	
+Турция	exact	PALOMA GRIDA	Paloma Grida	названия совпали	
+Турция	exact	ROBINSON SARIGERME PARK	Robinson Club Sarigerme Park	названия совпали	
+Турция	exact	ROYAL WINGS HOTEL	Royal Wings Hotel	названия совпали	
+Турция	exact	RIXOS DOWNTOWN ANTALYA THE LAND OF LEGENDS FREE ACCESS	Rixos Downtown Antalya The Land of Legends free access	названия совпали	
+Турция	exact	LIBERTY SIGNA	Liberty Signa	названия совпали	
+Турция	exact	CORNELIA DIAMOND GOLF RESORT & SPA	Cornelia Diamond Golf Resort & Spa	названия совпали	
+Турция	exact	BARUT GOIA (EX. BARUT SUNWING SIDE BEACH)	Barut Goia	названия совпали	
+Турция	exact	ROBINSON CAMYUVA ADULTS ONLY	Robinson Club Camyuva	названия совпали	
+Турция	exact	LUSSO SORGUN	Lusso Sorgun	названия совпали	
+Турция	exact	LIBERTY FABAY	Liberty Fabay	названия совпали	
+Турция	exact	LIBERTY HOTELS LYKIA	Liberty Hotels Lykia	названия совпали	
+Турция	exact	NIRVANA DOLCE VITA	Nirvana Dolce Vita	названия совпали	
+Турция	exact	NIRVANA MEDITERRANEAN EXCELLENCE	Nirvana Mediterranean Excellence	названия совпали	
+Турция	exact	CLUB MARVY (EX. PALOMA CLUB SULTAN)	Club Marvy (Ozdere)	названия совпали	
+Турция	exact	THE LAND OF LEGENDS NICKELODEON HOTEL & RESORT ANTALYA	The Land of Legends Nickelodeon Hotels & Resorts Antalya	названия совпали	
+Турция	exact	AKRA DIDIM	Akra Didim Resort & Spa	названия совпали	
+Турция	exact	CALISTA LUXURY RESORT	Calista Luxury Resort	названия совпали	
+Турция	exact	VOYAGE BELEK GOLF & SPA	Voyage Belek Golf & Spa	названия совпали	
+Турция	exact	VOYAGE KUNDU HOTEL	Voyage Kundu	названия совпали	
+Турция	exact	KEMPINSKI HOTEL THE DOME	Kempinski Hotel The Dome	названия совпали	
+Турция	exact	THE LAND OF LEGENDS KINGDOM (EX. RIXOS THE LAND OF LEGENDS THEME PARK)	The Land of Legends Kingdom Hotel	названия совпали	
+Турция	exact	VOYAGE TORBA	Voyage Torba	названия совпали	
+Турция	exact	XO CAPE ARNNA RESORT	XO Cape Arnna The Resort	названия совпали	
+Турция	exact	ETHNO HOTEL BELEK	Ethno Hotels Belek	названия совпали	
+Турция	exact	RIXOS SUNGATE CLUB DIAMOND	Rixos Sungate Club Diamond	названия совпали	
+Турция	exact	GLORIA VERDE RESORT	Gloria Verde Resort	названия совпали	
+Турция	exact	RIXOS PREMIUM BODRUM	Rixos Premium Bodrum	названия совпали	
+Турция	exact	HILTON DALAMAN SARIGERME RESORT & SPA	Hilton Dalaman Sarigerme Resort & Spa	названия совпали	
+Турция	exact	IC HOTELS GREEN PALACE & VILLAS	Ic Hotels Green Palace & Villas	названия совпали	
+Турция	exact	LARA BARUT COLLECTION	Lara Barut Collection	названия совпали	
+Турция	exact	NG PHASELIS BAY	NG Phaselis Bay	названия совпали	
+Турция	exact	XO CAPE ARNNA CLUB ADULTS ONLY	XO Cape Arnna Club Suites (Adults Only 18+)	названия совпали	
+Турция	exact	GLORIA GOLF RESORT	Gloria Golf Resort	названия совпали	
+Турция	exact	CULLINAN BELEK (EX. CULLINAN GOLF RESORT BELEK)	Cullinan Hotel Belek	названия совпали	
+Турция	exact	CAJA BY MAXX ROYAL	Caja By Maxx Royal	названия совпали	
+Турция	exact	REGNUM THE CROWN	Regnum The Crown	названия совпали	
+Турция	exact	GLORIA SERENITY RESORT	Gloria Serenity Resort	названия совпали	
+Турция	exact	MAXX ROYAL BELEK GOLF & SPA	Maxx Royal Belek Golf Resort	названия совпали	
+Турция	exact	MAXX ROYAL BODRUM RESORT	Maxx Royal Bodrum Resort	названия совпали	
+Турция	exact	MAXX ROYAL KEMER RESORT	Maxx Royal Kemer Resort	названия совпали	
+Турция	exact	CORNELIA AZURE VILLAS	Azure Villas By Cornelia	подтверждено словарём синонимов	
+Турция	exact	CLUB PRIVE BY RIXOS BELEK	Club Prive By Rixos Belek	названия совпали	
+Турция	exact	CLUB PRIVE BY RIXOS GOCEK	Club Prive By Rixos Gocek	названия совпали	
+Турция	strong	ALMERA PARK APARTMENT	Almera Park Apart Hotel	одно название содержится в другом	
+Турция	strong	EN VIE BEACH BOUTIQUE ADULTS ONLY 16+	En Vie Beach Boutique Hotel	одно название содержится в другом	
+Турция	strong	WHITE LILYUM (EX. MG WHITE LILYUM )	MG White Lilyum Hotel	одно название содержится в другом	
+Турция	strong	CASA FORA BEACH RESORT BY MIRAMOR	Casa Fora Beach Resort	одно название содержится в другом	
+Турция	strong	SIDE VILLAGE FAMILY SUITE HOTEL	Side Village Hotel	одно название содержится в другом	
+Турция	strong	NOXINN DELUXE HOTEL	Nox Inn Deluxe Hotel	написание другим алфавитом (90%)	
+Турция	strong	ANANEA KLEOPATRA BEACH ADULTS ONLY 12+ (EX. COOKS CLUB ALANYA)	Ananea Kleopatra Beach	одно название содержится в другом	
+Турция	strong	MARBAS SELECT BEACH ADULTS ONLY 14+	Marbas Select Beach	одно название содержится в другом	
+Турция	strong	LYKIA WORLD & LINKS GOLF	Lykia World & Links Golf Antalya	одно название содержится в другом	
+Турция	strong	CRYSTAL WORLD OF COLOURS COMFORT COLLECTION	Avantgarde Urban Sisli (Collection)	одно название содержится в другом	
+Турция	strong	ARMAS LIFE BELEK (EX. FUN&SUN FAMILY LIFE BELEK)	Life Belek	одно название содержится в другом	
+Турция	strong	ZENIYA PETUNYA BEACH RESORT (EX. PETUNYA BEACH RESORT)	Petunya Beach Resort	одно название содержится в другом	
+Турция	strong	PASHAS PRINCESS ADULTS ONLY 16+	Pasha`s Princess	одно название содержится в другом	
+Турция	strong	ANTIQUE ROMAN PALACE MUSEUM HOTEL ADULTS ONLY 16+	Antique Roman Palace	одно название содержится в другом	
+Турция	strong	MICHELL HOTEL & SPA ADULTS ONLY 16+	Michell Hotel & Spa	одно название содержится в другом	
+Турция	strong	GREEN GARDEN SUITE	Green Garden Suites	одно название содержится в другом	
+Турция	strong	OLUDENIZ TURQUOISE HOTEL	Turquoise	одно название содержится в другом	
+Турция	strong	SORGUN AKADIA LUXURY HOTEL ADULTS ONLY 16+	Sorgun Akadia Luxury	одно название содержится в другом	
+Турция	strong	CASA BLANCA BEACH HOTEL ADULTS ONLY 13+	Casa Blanca (Adult Only 12+)	одно название содержится в другом	
+Турция	strong	LABRANDA MARES (EX. GRAND YAZICI CLUB MARES)	Labranda Mares Marmaris	одно название содержится в другом	
+Турция	strong	ZENIYA LATANYA PARK RESORT	Latanya Park Resort	одно название содержится в другом	
+Турция	strong	GREEN MAX HOTEL MANAGED BY FM (EX.CHERVO CLUB SIRENE)	Green Max Hotel	одно название содержится в другом	
+Турция	strong	MOTTO PREMIUM MARMARIS (EX. ORKA NERGIS SELECT)	Motto Premium Hotel & Spa	одно название содержится в другом	
+Турция	strong	ZENIYA BODRUM PARK RESORT	Bodrum Park Resort	одно название содержится в другом	
+Турция	strong	AMARA COMFORT KEMER (EX. LOXIA COMFORT RESORT)	Amara Comfort Resort	одно название содержится в другом	
+Турция	strong	RAMADA PLAZA BY WINDHAM ANTALYA	Ramada Plaza by Wyndham Antalya	то же название другим алфавитом	
+Турция	strong	KADIKALE RESORT SPA & WELLNESS	Kadikale Resort	одно название содержится в другом	
+Турция	strong	SUNLAND RESORT (EX.IMPERIAL SUNLAND RESORT)	Sunland Resort Beldibi	одно название содержится в другом	
+Турция	strong	THE BEACHFRONT HOTEL ADULT ONLY 16+	The Beachfront Hotel	одно название содержится в другом	
+Турция	strong	SIGNATURE BLUE RESORT KUSADASI (EX. GRAND OZCELIK)	Signature Blue Resort	одно название содержится в другом	
+Турция	strong	SWANDOR HOTELS & RESORTS (EX. PGS KIRIS RESORT)	Swandor Hotels & Resorts Kemer	одно название содержится в другом	
+Турция	strong	THE NORM ORIENTAL KEMER (EX. ASTERIA KEMER RESORT)	The Norm Oriental	одно название содержится в другом	
+Турция	strong	FLORA GARDEN BEACH ADULTS ONLY 16+	Flora Garden Beach	одно название содержится в другом	
+Турция	strong	LIBERTY GOLF & RESORT KUSADASI (EX. SEVEN SEAS SEALIGHT ELITE)	Liberty Kusadasi	написание другим алфавитом (88%)	
+Турция	strong	SUNPRIME C-LOUNGE ADULTS ONLY 16+	Sunprime C-Lounge	одно название содержится в другом	
+Турция	strong	ADAM & EVE HOTEL ADULTS ONLY 16+	Adam & Eve	одно название содержится в другом	
+Турция	strong	DIAMOND ELITE HOTEL & SPA ADULTS ONLY 16+	Diamond Elite Hotel & Spa	одно название содержится в другом	
+Турция	strong	DIAMOND DE LUXE HOTEL & SPA	Diamond Deluxe Hotel & Spa	написание другим алфавитом (92%)	
+Турция	strong	LIMAK ARCADIA GOLF & SPORT RESORT	Limak Arcadia Sport Resort Hotel	написание другим алфавитом (89%)	
+Турция	strong	LIMAK ATLANTIS DE LUXE HOTEL & RESORT	Limak Atlantis Deluxe Resort & Hotel	написание другим алфавитом (94%)	
+Турция	strong	LA BLANCHE ISLAND BODRUM	La Blanche Island	одно название содержится в другом	
+Турция	strong	DELPHIN BOTANIK PLATINUM	Botanik Platinum	одно название содержится в другом	
+Турция	strong	CACTUS MIRAGE FAMILY CLUB	Cactus Club Mirage	одно название содержится в другом	
+Турция	strong	DOBEDAN WORLD PALACE (EX. ALVA DONNA WORLD PALACE)	Dobedan World Palace Kemer	одно название содержится в другом	
+Турция	strong	TUI MAGIC LIFE BODRUM ADULT ONLY 16+ (EX. ERSAN EXCLUSIVE RESORT & SPA)	TUI Magic Life Bodrum	одно название содержится в другом	
+Турция	strong	SURAL SARAY ADULTS ONLY 16+	Sural Saray	одно название содержится в другом	
+Турция	strong	SUSONA BODRUM (EX. NIKKI BEACH RESORT BODRUM)	Susona Bodrum, LXR Hotels & Resorts	одно название содержится в другом	
+Турция	strong	XANADU ISLAND BODRUM	Xanadu Island	одно название содержится в другом	
+Турция	strong	THE NORM LE CHIC (EX. KAYA PALAZZO RESORT & RESIDENCES BODRUM)	The Norm Le Chic Bodrum	одно название содержится в другом	
+Турция	strong	CASA NONNA BODRUM ADULTS ONLY 16+	Casa Nonna Bodrum	одно название содержится в другом	
+Турция	strong	KAYA PALAZZO GOLF RESORT (EX. RIU)	Kaya Palazzo Golf Resort Belek	одно название содержится в другом	
+Турция	strong	ELA EXCELLENCE RESORT BELEK (EX. ELA QUALITY RESORT)	Ela Excellence Resort	одно название содержится в другом	
+Турция	strong	RIXOS PREMIUM TEKIROVA THE LAND OF LEGENDS FREE ACCESS	Rixos Premium Tekirova	одно название содержится в другом	
+Турция	strong	AKRA FETHIYE THE RESIDENCE TUI BLUE SENSATORI ADULTS ONLY 16+	Akra Fethiye The Residence Tui Blue Sensatori	одно название содержится в другом	
+Турция	strong	RIXOS PREMIUM GOCEK ADULTS ONLY 13+	Rixos Premium Gocek	одно название содержится в другом	
+Турция	strong	RIXOS PREMIUM BELEK THE LAND OF LEGENDS FREE ACCESS	Rixos Premium Belek	одно название содержится в другом	
+Турция	strong	REGNUM CARYA GOLF & SPA	Regnum Carya	одно название содержится в другом	
+Турция	review	THE NIX HOTEL KEMER (EX. OMORFI GARDEN)	The Nix Hotel	названия похожи, но совпадение короткое	
+Турция	review	KAPTAN HOTEL	Smartline Kaptan Hotel	названия похожи, но совпадение короткое	
+Турция	review	AKKA CLAROS HOTEL	Akka Suites	названия похожи, но совпадение короткое	
+Турция	review	RAMADA RESORT AKBUK	Ramada Resort by Wyndham Akbuk	частичное совпадение слов (67%)	
+Турция	review	TIMO DELUXE RESORT	Timo Resort Hotel	названия похожи, но совпадение короткое	
+Турция	review	NARCIA RESORT	Narcia Resort Side	названия похожи, но совпадение короткое	
+Турция	review	JASMIN BEACH HOTEL BODRUM	Jasmin Beach Hotel	названия похожи, но совпадение короткое	
+Турция	review	QUADAS ADULTS ONLY 16+	Quadas	названия похожи, но совпадение короткое	
+Турция	review	KAYA SIDE	Side Hotel	названия похожи, но совпадение короткое	
+Турция	review	AKRA ANTALYA	Akra Hotel	названия похожи, но совпадение короткое	
+Турция	review	LONG BEACH	Long Beach Alanya	названия похожи, но совпадение короткое	
+Турция	review	ARIN RESORT (EX. SUNDANCE RESORT)	Barin	названия похожи, но совпадение короткое	
+Турция	review	SIRENE SUITES & VILLAS	Sirene Belek Bohemia Suites & Villas	названия похожи, но совпадение короткое	
+Турция	review	AKKA HOTELS ANTEDON RESIDENCE VILLAS	Akka Residence	частичное совпадение слов (67%)	

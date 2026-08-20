@@ -244,3 +244,28 @@ def test_short_core_does_not_get_promoted_by_transliteration():
 def test_guest_house_is_noise_like_its_russian_twin():
     """«Гостевой дом» в шумовых словах был, а «guest house» — нет, хотя это одно и то же."""
     assert compare(h("КОРАЛЛ"), h("Guest House Korall"))[0].comparable
+
+
+def test_brand_suffix_in_parentheses_is_not_an_alternate_name():
+    """«(Collection)» — брендовая приписка, а не второе написание: как самостоятельная
+    форма она склеила «Avantgarde Urban Sisli (Collection)» с «CRYSTAL WORLD OF COLOURS
+    COMFORT COLLECTION» — двумя разными отелями в разных городах."""
+    assert compare(h("CRYSTAL WORLD OF COLOURS COMFORT COLLECTION"),
+                   h("Avantgarde Urban Sisli (Collection)"))[0] is Confidence.NONE
+    # Настоящие вторые написания живы: другой алфавит или два и более значимых слова.
+    assert compare(h("SALVE (САЛЬВЭ)"), h("Сальвэ"))[0].comparable
+    assert compare(h("ТАМЫШ ВИЛЛАДЖ (TAMISH VILLAGE)"), h("Тамыш Village"))[0].comparable
+
+
+def test_same_level_candidates_prefer_the_matching_resort():
+    """Два разных Turquoise спаривались перекрёстно: «TURQUOISE RESORT» (Сиде) забирал
+    наш олюденизский «Turquoise Hotel». Курорт — не вето, а порядок предпочтения при
+    равной уверенности."""
+    m = match_hotels(
+        [h("TURQUOISE RESORT HOTEL & SPA", dest="Сиде"),
+         h("OLUDENIZ TURQUOISE HOTEL", dest="Олюдениз")],
+        [h("Turquoise Hotel", dest="Олюдениз", provider="sletat"),
+         h("Turquoise", dest="Сиде", provider="sletat")])
+    routed = {x.reference.hotel_name: x.checked.destination for x in m.pairs}
+    assert routed["TURQUOISE RESORT HOTEL & SPA"] == "Сиде"
+    assert routed["OLUDENIZ TURQUOISE HOTEL"] == "Олюдениз"
