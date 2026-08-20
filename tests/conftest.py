@@ -20,3 +20,19 @@ def _no_alias_dictionary(tmp_path, monkeypatch):
     yield
     aliases._CACHE = (-1.0, [])
     refresh_aliases()
+
+
+@pytest.fixture
+def alias_dictionary(tmp_path, monkeypatch):
+    """Временный словарь синонимов; возвращает функцию записи его содержимого."""
+    path = tmp_path / "hotel_aliases.yaml"
+    monkeypatch.setattr(aliases, "DEFAULT_PATH", path)
+    aliases._CACHE = (-1.0, [])
+    refresh_aliases()
+
+    def write(text: str) -> None:
+        path.write_text(text, encoding="utf-8")
+        refresh_aliases()
+
+    yield write
+    aliases._CACHE = (-1.0, [])

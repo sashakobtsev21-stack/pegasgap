@@ -21,7 +21,16 @@ from difflib import SequenceMatcher
 from pegasgap.catalog import CatalogHotel
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
-from pegasgap.matching import Confidence, ascii_core, compare, core, normalize, refresh_aliases, tokens
+from pegasgap.matching import (
+    Confidence,
+    alias_groups,
+    ascii_core,
+    compare,
+    core,
+    normalize,
+    refresh_aliases,
+    tokens,
+)
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 log = logging.getLogger("pegasgap.diagnosis")
@@ -30,22 +39,72 @@ log = logging.getLogger("pegasgap.diagnosis")
 class CatalogIndex:
     """Справочник, подготовленный к поиску по названию.
 
-    Точные совпадения ищутся по индексу ядра имени, остальное — перебором. Перебор по
-    одиннадцати тысячам записей на каждый пропуск был бы расточителен, а индекс закрывает
-    подавляющее большинство случаев одним обращением к словарю.
+    Точные совпадения ищутся по индексу ядра имени, остальное — по ОТБОРУ кандидатов,
+    а не полным перебором. Перебор по словарю на каждый пропуск съедал прогон живьём:
+    у витрины по России 32 тысячи записей, у прогона — сотни находок, и каждая пара
+    прогонялась через полный матчер с постройкой модели — минуты чистого CPU на кейс.
+
+    Отбор ничего осмысленного не теряет: кандидат обязан делить с находкой либо слово
+    (перестановки, приписки районов), либо префикс ascii-ядра (слитные написания —
+    «Lares Park» против «LARESPARK», у которых токенизация не видит общих слов), либо
+    группу словаря синонимов (пары без единой общей буквы). Кандидат вне этих трёх
+    входов не пережил бы ни одну проверку ниже по течению: фильтру показа
+    `_plausible_candidate` нужны общие слова или близкие ядра с общей первой буквой.
     """
+
+    # Вёдра генерических ключей («beach», «park», «гостевойдом…») собирают тысячи
+    # записей и превращают отбор обратно в перебор; такое ведро не сужает поиск и
+    # выбрасывается целиком — по-настоящему похожего кандидата приведёт другой вход.
+    BUCKET_CAP = 300
+    # Длина префикса ядра. Четыре символа ловят слитные написания и почти все опечатки
+    # (опечатка в первых четырёх буквах одиночного слова без общих токенов — экзотика),
+    # а вёдра держат узкими.
+    PREFIX_LEN = 4
 
     def __init__(self, hotels: list[CatalogHotel]) -> None:
         refresh_aliases()
         self.hotels = hotels
-        self._by_core: dict[str, list[CatalogHotel]] = defaultdict(list)
-        for hotel in hotels:
+        # Модели предложений строятся один раз: постройка на каждое сравнение была
+        # заметной долей перебора.
+        self._offers = [hotel.as_offer() for hotel in hotels]
+        self._by_core: dict[str, list[int]] = defaultdict(list)
+        by_token: dict[str, list[int]] = defaultdict(list)
+        by_prefix: dict[str, list[int]] = defaultdict(list)
+        self._by_alias: dict[int, list[int]] = defaultdict(list)
+        for i, hotel in enumerate(hotels):
             key = core(hotel.name)
             if key:
-                self._by_core[key].append(hotel)
+                self._by_core[key].append(i)
+            acore = ascii_core(hotel.name)
+            if acore:
+                by_prefix[acore[:self.PREFIX_LEN]].append(i)
+            for token in tokens(hotel.name):
+                t = ascii_core(token)
+                if len(t) >= 3:
+                    by_token[t].append(i)
+            for group in alias_groups(hotel.name):
+                self._by_alias[group].append(i)
+        self._by_token = {t: ids for t, ids in by_token.items()
+                          if len(ids) <= self.BUCKET_CAP}
+        self._by_prefix = {p: ids for p, ids in by_prefix.items()
+                           if len(ids) <= self.BUCKET_CAP}
 
     def __bool__(self) -> bool:
         return bool(self.hotels)
+
+    def _candidate_ids(self, name: str) -> list[int]:
+        """Кандидаты трёх входов (слово / префикс ядра / словарь), в порядке справочника."""
+        ids: set[int] = set()
+        for token in tokens(name):
+            t = ascii_core(token)
+            if len(t) >= 3:
+                ids.update(self._by_token.get(t, ()))
+        acore = ascii_core(name)
+        if acore:
+            ids.update(self._by_prefix.get(acore[:self.PREFIX_LEN], ()))
+        for group in alias_groups(name):
+            ids.update(self._by_alias.get(group, ()))
+        return sorted(ids)
 
     def find(self, gap: HotelGap) -> tuple[CatalogHotel | None, Confidence]:
         """Лучший кандидат справочника для отеля из находки.
@@ -61,19 +120,19 @@ class CatalogIndex:
             return None, Confidence.NONE
 
         best: tuple[CatalogHotel | None, Confidence] = (None, Confidence.NONE)
-        for candidate in self._by_core.get(key, []):
-            confidence, _ = compare(probe, candidate.as_offer())
+        for i in self._by_core.get(key, []):
+            confidence, _ = compare(probe, self._offers[i])
             if confidence is Confidence.EXACT:
-                return candidate, confidence
-            best = _better(best, (candidate, confidence))
+                return self.hotels[i], confidence
+            best = _better(best, (self.hotels[i], confidence))
         if best[1].comparable:
             return best[0], _temper(gap.hotel_name, best[0], best[1])
 
-        for candidate in self.hotels:
-            confidence, _ = compare(probe, candidate.as_offer())
+        for i in self._candidate_ids(gap.hotel_name):
+            confidence, _ = compare(probe, self._offers[i])
             if confidence is Confidence.STRONG:
-                return candidate, _temper(gap.hotel_name, candidate, confidence)
-            best = _better(best, (candidate, confidence))
+                return self.hotels[i], _temper(gap.hotel_name, self.hotels[i], confidence)
+            best = _better(best, (self.hotels[i], confidence))
         return best[0], _temper(gap.hotel_name, best[0], best[1])
 
 

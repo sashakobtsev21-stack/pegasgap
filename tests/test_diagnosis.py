@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from pegasgap.catalog import CatalogHotel
 from pegasgap.diagnosis import CatalogIndex, diagnose, diagnose_gap, diagnose_reverse, reverse_index
+from pegasgap.matching import Confidence
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
 from pegasgap.models import (
@@ -389,3 +390,47 @@ def test_weak_pair_with_star_clash_is_not_the_same_name():
     scan = scan_with([g])
     diagnose_reverse(scan, reverse_index(their))
     assert g.diagnosis is HotelDiagnosis.REF_NOT_IN_DICTIONARY
+
+
+# ------------------------------- отбор кандидатов индекса -------------------------------
+# Полный перебор словаря заменён отбором: у витрины по России 32 тысячи записей, у
+# прогона — сотни находок, и каждая пара шла через полный матчер — минуты чистого CPU
+# на кейс. Эти тесты — регрессия на входы отбора: всё, что находил перебор и что
+# переживает фильтры показа, обязан находить и отбор.
+
+
+def _find(catalog, name, stars=None):
+    g = gap(name, stars)
+    g.kind = GapKind.HOTEL
+    return CatalogIndex(catalog).find(g)
+
+
+def test_prefilter_finds_word_order_variant():
+    """«CORNELIA AZURE VILLAS» против «Azure Villas By Cornelia»: ядра не равны и первая
+    буква разная — кандидата обязан привести вход по общим словам. Сила пары — дело
+    матчера (здесь WEAK, в жизни такие добивает словарь синонимов); отбор отвечает
+    только за то, чтобы кандидат вообще дошёл до сравнения."""
+    hotel = CatalogHotel(id=1, name="Azure Villas By Cornelia", stars=5, town_id=None)
+    got, conf = _find([hotel] + CATALOG, "CORNELIA AZURE VILLAS", stars=5)
+    assert got is hotel
+    assert conf is not Confidence.NONE
+
+
+def test_prefilter_finds_fused_spelling():
+    """«LARESPARK TAKSIM» слитно против «Lares Park»: общих значимых слов нет
+    (токенизация видит одно слово, район — топоним), кандидата приводит вход по первой
+    букве ascii-ядра."""
+    hotel = CatalogHotel(id=2, name="LARESPARK TAKSIM", stars=4, town_id=None)
+    got, conf = _find([hotel] + CATALOG, "Lares Park", stars=4)
+    assert got is hotel
+    assert conf.comparable
+
+
+def test_prefilter_finds_dictionary_pair_without_shared_words(alias_dictionary):
+    """«Beso Beach» ↔ «ELITE LIFE»: ни общего слова, ни общей первой буквы — кандидата
+    обязан привести вход по группе словаря синонимов."""
+    alias_dictionary("- [Beso Beach, ELITE LIFE]\n")
+    hotel = CatalogHotel(id=3, name="ELITE LIFE", stars=5, town_id=None)
+    got, conf = _find([hotel] + CATALOG, "Beso Beach", stars=5)
+    assert got is hotel
+    assert conf is Confidence.EXACT

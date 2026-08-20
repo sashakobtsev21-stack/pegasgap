@@ -184,3 +184,40 @@ async def test_single_stall_is_retried_before_believing_the_end(monkeypatch):
     blocks, finished, complete = await provider._collect_pages(None, 1, "ref")
     assert finished and complete
     assert tourvisor_api._hotel_codes(blocks) == {1, 2, 3}
+
+
+# ---------------------------------- кеш словаря отелей ----------------------------------
+
+
+async def test_country_hotels_dictionary_is_cached(monkeypatch):
+    """Словарь тяжёлый (Россия — 32 тысячи записей) и нужен каждому кейсу направления:
+    без кеша обход качал бы его сотни раз за круг."""
+    calls = 0
+
+    async def fake(country):
+        nonlocal calls
+        calls += 1
+        return {1: {"name": "X"}}
+
+    monkeypatch.setattr(tourvisor_api, "_fetch_country_hotels_now", fake)
+    monkeypatch.setattr(tourvisor_api, "_hotels_cache", {})
+    assert await tourvisor_api.fetch_country_hotels("Россия") == {1: {"name": "X"}}
+    assert await tourvisor_api.fetch_country_hotels("Россия") == {1: {"name": "X"}}
+    assert calls == 1
+
+
+async def test_failed_dictionary_fetch_is_not_cached(monkeypatch):
+    """Неудача не должна залипать на весь TTL: следующий кейс обязан попробовать снова."""
+    answers = [{}, {2: {"name": "Y"}}]
+    calls = 0
+
+    async def fake(country):
+        nonlocal calls
+        calls += 1
+        return answers[calls - 1]
+
+    monkeypatch.setattr(tourvisor_api, "_fetch_country_hotels_now", fake)
+    monkeypatch.setattr(tourvisor_api, "_hotels_cache", {})
+    assert await tourvisor_api.fetch_country_hotels("Египет") == {}
+    assert await tourvisor_api.fetch_country_hotels("Египет") == {2: {"name": "Y"}}
+    assert calls == 2

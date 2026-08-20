@@ -125,7 +125,10 @@ async def _diagnose(scan: ScanResult) -> None:
     # читается как ошибка инструмента, что показал живой Atlantis Royal.
     if scan.gaps_of(GapKind.REVERSE):
         their_hotels = await fetch_country_hotels(scan.params.destination_country)
-        diagnose_reverse(scan, reverse_index(their_hotels))
+        # Каждая находка сверяется со ВСЕМ словарём витрины — чистый CPU, в поток
+        # (почему это важно — см. run_scan).
+        await asyncio.to_thread(
+            lambda: diagnose_reverse(scan, reverse_index(their_hotels)))
         # «Нет в листинге» ещё не «нет»: прижатая проба подтверждает или снимает.
         await verify_reverse(scan)
     if not scan.gaps_of(GapKind.HOTEL):
@@ -136,7 +139,8 @@ async def _diagnose(scan: ScanResult) -> None:
     direction = await asyncio.to_thread(
         load_direction, scan.operator, scan.params.departure_city,
         scan.params.destination_country)
-    diagnose(scan, catalog, links, direction)
+    # Тот же CPU-разбор, что и у обратной стороны, — тоже в поток.
+    await asyncio.to_thread(diagnose, scan, catalog, links, direction)
     # Главный класс находок подтверждается пробой шлюза — после диагностики: пробуются
     # только уверенно опознанные отели, а опознание даёт она.
     await verify_hotel_gaps(scan)
@@ -155,7 +159,12 @@ async def run_scan(params: SearchParams, operator: str, db_path: Path,
     берётся параметрный (годится для точечных прогонов, где история не главное).
     """
     results = await run_pair(params, headless=headless)
-    scan = detect(params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
+    # Сопоставление — чистый CPU без единого await: сотни отелей × фаззи-сравнение.
+    # На событийном цикле Россия (800+ отелей) замораживала весь процесс минутами:
+    # соседние параллельные поиски не могли тикать и «превышали таймаут», API молчал.
+    # Потому — в поток; GIL переключается, и цикл продолжает дышать.
+    scan = await asyncio.to_thread(
+        detect, params, results.get(REFERENCE), results.get(CHECKED), operator=operator)
     scan.scenario_key = scenario_key
     await _diagnose(scan)
     with storage.session(db_path) as conn:

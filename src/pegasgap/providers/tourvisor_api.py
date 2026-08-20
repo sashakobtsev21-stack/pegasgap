@@ -762,6 +762,14 @@ async def _probe_gated(params: SearchParams, hotel_ids: list[int]) -> set[int] |
     return found
 
 
+# Кеш словарей отелей по странам: (момент загрузки, словарь). Словарь тяжёлый
+# (Россия — 32 тысячи записей) и нужен КАЖДОМУ кейсу направления: без кеша обход
+# качал бы его сотни раз за круг. Состав меняется днями, TTL в часы безопасен.
+_HOTELS_TTL_S = float(os.environ.get("PEGASGAP_TOURVISOR_HOTELS_TTL_S") or 6 * 3600)
+_hotels_cache: dict[str, tuple[float, dict[int, dict]]] = {}
+_hotels_cache_lock = asyncio.Lock()
+
+
 async def fetch_country_hotels(country: str) -> dict[int, dict]:
     """Словарь отелей страны НА ВИТРИНЕ (id → запись) — для разбора обратных находок.
 
@@ -769,7 +777,25 @@ async def fetch_country_hotels(country: str) -> dict[int, dict]:
     отель вовсе, знать под другим именем, а может знать и просто не иметь туров. Различие
     делается по её же словарю. Пустой ответ означает «не смогли прочитать», и вызывающий
     оставляет диагноз пустым, а не выдумывает его.
+
+    Успешный ответ кешируется на `_HOTELS_TTL_S`; неудача — нет, следующий кейс
+    попробует снова. Замок гасит толпу: параллельные кейсы одного направления ждут
+    одну загрузку, а не устраивают шесть одинаковых.
     """
+    got = _hotels_cache.get(country)
+    if got and time.monotonic() - got[0] < _HOTELS_TTL_S:
+        return got[1]
+    async with _hotels_cache_lock:
+        got = _hotels_cache.get(country)     # пока ждали замок, сосед мог уже скачать
+        if got and time.monotonic() - got[0] < _HOTELS_TTL_S:
+            return got[1]
+        data = await _fetch_country_hotels_now(country)
+        if data:
+            _hotels_cache[country] = (time.monotonic(), data)
+        return data
+
+
+async def _fetch_country_hotels_now(country: str) -> dict[int, dict]:
     provider = TourvisorApiProvider()
     proxy = pool().acquire()
     try:

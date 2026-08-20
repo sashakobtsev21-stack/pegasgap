@@ -168,10 +168,21 @@ def refresh_aliases() -> None:
 
 
 def _same_alias_group(a: str, b: str) -> bool:
-    ga = {_ALIAS_GROUPS[k] for k in cores(a) if k in _ALIAS_GROUPS}
+    ga = alias_groups(a)
     if not ga:
         return False
     return any(_ALIAS_GROUPS.get(k) in ga for k in cores(b))
+
+
+def alias_groups(name: str) -> set[int]:
+    """Номера групп словаря синонимов, в которые входит название (обычно ноль или одна).
+
+    Нужен отбору кандидатов в справочном поиске: словарная пара может не делить ни
+    одной буквы («Beso Beach» ↔ «ELITE LIFE»), и отбор по общим словам её потерял бы.
+    Свежесть таблицы обеспечивает вызывающий (`refresh_aliases` на входах) — здесь
+    только чтение, функция зовётся на каждую находку.
+    """
+    return {_ALIAS_GROUPS[k] for k in cores(name) if k in _ALIAS_GROUPS}
 
 
 class Confidence(StrEnum):
