@@ -21,7 +21,7 @@ from difflib import SequenceMatcher
 from pegasgap.catalog import CatalogHotel
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
-from pegasgap.matching import Confidence, ascii_core, compare, core, refresh_aliases, tokens
+from pegasgap.matching import Confidence, ascii_core, compare, core, normalize, refresh_aliases, tokens
 from pegasgap.models import GapKind, HotelDiagnosis, HotelGap, ScanResult
 
 log = logging.getLogger("pegasgap.diagnosis")
@@ -48,7 +48,13 @@ class CatalogIndex:
         return bool(self.hotels)
 
     def find(self, gap: HotelGap) -> tuple[CatalogHotel | None, Confidence]:
-        """Лучший кандидат справочника для отеля из находки."""
+        """Лучший кандидат справочника для отеля из находки.
+
+        Сила совпадения дополнительно приземляется `_temper`: справочный вердикт — это
+        УТВЕРЖДЕНИЕ тождества (id уходит в ссылки и в «заведён как…»), и держится оно
+        на более строгой планке, чем сопоставление выдач, где лишняя пара всего лишь
+        прячет находку.
+        """
         probe = gap_as_offer(gap)
         key = core(gap.hotel_name)
         if not key:
@@ -61,14 +67,14 @@ class CatalogIndex:
                 return candidate, confidence
             best = _better(best, (candidate, confidence))
         if best[1].comparable:
-            return best
+            return best[0], _temper(gap.hotel_name, best[0], best[1])
 
         for candidate in self.hotels:
             confidence, _ = compare(probe, candidate.as_offer())
             if confidence is Confidence.STRONG:
-                return candidate, confidence
+                return candidate, _temper(gap.hotel_name, candidate, confidence)
             best = _better(best, (candidate, confidence))
-        return best
+        return best[0], _temper(gap.hotel_name, best[0], best[1])
 
 
 _ORDER = {Confidence.NONE: 0, Confidence.WEAK: 1, Confidence.STRONG: 2, Confidence.EXACT: 3}
@@ -77,6 +83,28 @@ _ORDER = {Confidence.NONE: 0, Confidence.WEAK: 1, Confidence.STRONG: 2, Confiden
 def _better(a: tuple[CatalogHotel | None, Confidence],
             b: tuple[CatalogHotel | None, Confidence]) -> tuple[CatalogHotel | None, Confidence]:
     return b if _ORDER[b[1]] > _ORDER[a[1]] else a
+
+
+def _temper(probe_name: str, hotel: CatalogHotel | None,
+            confidence: Confidence) -> Confidence:
+    """Не утверждать тождество по вхождению одиночного слова.
+
+    Живой случай: «DOGAN PARADISE BEACH HOTEL» опознался в справочнике как «Paradise
+    Apart» — ядро «paradise» проходит порог длины вхождения, но это одно генерическое
+    слово, и по нему в ссылку и в «заведён как…» уехал ЧУЖОЙ отель. Для сопоставления
+    выдач щедрость безопасна (лишняя пара прячет находку), а справочный вердикт —
+    утверждение, и вхождению нужно либо два значимых слова, либо длинное ядро.
+    """
+    if hotel is None or confidence is not Confidence.STRONG:
+        return confidence
+    ca, cb = core(probe_name), core(hotel.name)
+    if not ca or not cb or ca == cb or (ca not in cb and cb not in ca):
+        return confidence
+    short_name = probe_name if len(ca) <= len(cb) else hotel.name
+    short_core = min(ca, cb, key=len)
+    if len(normalize(short_name).split()) >= 2 or len(short_core) >= 12:
+        return confidence
+    return Confidence.WEAK
 
 
 def gap_as_offer(gap: HotelGap):

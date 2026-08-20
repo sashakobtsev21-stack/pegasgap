@@ -58,3 +58,24 @@ def test_gate_and_linking_signatures():
     assert "no_link_hotel" in codes(["Tour Hotel does not have a link."])
     assert "hotels_unavailable" in codes([
         "Founded 7 hotels that are not available from TO. MissingIds: 1,2,3"])
+
+
+SUNMAR_CAP = ("Reached max recommended rows count limit (400) for requst ID: 688380321 "
+              "by filter with date: 9/23/2026 - 9/26/2026, from area: 2671 to area: 1 "
+              "on page index: 201, current rows in tours: 400")
+SUNMAR_NO_LINKS = ("Missing linked data exception: Empty HotelIds in linked data, "
+                   "performing request where hotelIds is empty array: request "
+                   "ID:688380321, source ID:54, request URL:")
+
+
+def test_sunmar_signatures_from_live_kibana():
+    """Строки сняты с живого прогона 688380321 (сверка Е4 через коннектор): лимит строк
+    режет хвост выдачи Sunmar, а пустая линковка пускает поиск без фильтра отелей."""
+    cause = only([SUNMAR_CAP], "rows_capped")
+    assert "400" in cause.detail
+    assert "no_linked_hotels" in codes([SUNMAR_NO_LINKS])
+
+
+def test_ranges_two_is_not_ranges_zero():
+    """Живой прогон: «Ranges count: 2» не должен ловиться сигнатурой «Ranges count: 0»."""
+    assert parse_lines(["InternalRequestId: 688380321.\n Ranges count: 2\n Origin"]) == []

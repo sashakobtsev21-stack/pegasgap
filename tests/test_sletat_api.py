@@ -17,6 +17,8 @@ from pegasgap.providers.sletat_api import (
     _find_by_name,
     _redact,
     build_hotel_offers,
+    offer_facts,
+    own_rows_share,
     parse_price,
     parse_stars,
     split_load_state,
@@ -289,3 +291,19 @@ def test_regional_clone_counts_as_a_foreign_operator():
     from pegasgap.providers.sletat_api import own_rows_share
     rows = [_row("Pegas Touristik"), _row("Pegas UZ")]
     assert own_rows_share(rows, "Pegas Touristik") == 0.5
+
+
+def test_garbage_rows_do_not_crash_the_builder():
+    """Л3 плана: строки не той длины, мусорные цены и не-списки — честный ноль."""
+    junk = [
+        "строка вместо списка",
+        [],
+        [1, 2, 3],
+        [None] * 40,
+        ["x"] * 10 + ["Отель"] + ["y"] * 30,
+    ]
+    assert build_hotel_offers(junk, "Pegas Touristik") == []
+    # Структурно валидная строка с мусором внутри даёт факт с None-полями — нечитаемое
+    # не проверяется, но и не роняет. Выдумать дату или ночи из мусора нельзя.
+    assert all(f.checkin is None and f.nights is None for f in offer_facts(junk))
+    assert own_rows_share(junk, "Pegas Touristik") in (None, 0.0)

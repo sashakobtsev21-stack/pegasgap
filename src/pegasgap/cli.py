@@ -437,12 +437,15 @@ async def _fill_links(db: Path) -> tuple[int, int]:
 
 
 @app.command()
-def doctor(db: Path = typer.Option(Path("pegasgap.db"), help="База находок")) -> None:
+def doctor(db: Path = typer.Option(Path("pegasgap.db"), help="База находок"),
+           live: bool = typer.Option(False, help="Ещё и резолвинг матрицы на площадках")) -> None:
     """Проверить инварианты базы и сойтись в счётчиках (блок Ж плана AUDIT.md)."""
-    from pegasgap.doctor import report, run_checks
+    from pegasgap.doctor import live_refdata_checks, report, run_checks
 
     with storage.session(db) as conn:
         checks = run_checks(conn)
+    if live:
+        checks += asyncio.run(live_refdata_checks())
     console.print(report(checks))
     if any(not c.ok for c in checks):
         raise typer.Exit(code=1)

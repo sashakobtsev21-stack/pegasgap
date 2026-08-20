@@ -18,6 +18,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from pegasgap import storage
 from pegasgap.models import SearchParams
@@ -147,3 +148,62 @@ def report(checks: list[Check]) -> str:
     verdict = ("все проверки прошли" if not failed
                else f"НАРУШЕНИЙ: {len(failed)} из {len(checks)}")
     return "\n".join([verdict, *lines])
+
+
+async def live_refdata_checks(config_path: str = "scenarios.yaml") -> list[Check]:
+    """А9 плана: вся матрица резолвится в справочниках ОБЕИХ площадок — без поиска.
+
+    Ловит тихую смерть кейса: город переименовали, страну сняли с витрины, оператора
+    убрали из направления — и кейс молча возвращает «не найден» на каждом круге, сжигая
+    квоту. Дешёвая проверка словарями, поиск не запускается.
+    """
+    import httpx
+
+    from pegasgap.providers import tourvisor_api as tv
+    from pegasgap.providers.sletat_api import SletatApiProvider
+    from pegasgap.proxies import pool
+    from pegasgap.scenarios import load_matrix
+
+    matrix = load_matrix(Path(config_path))
+    cities = sorted({c for c in matrix.departure_cities}
+                    | {c for c, _ in matrix.routes})
+    countries = sorted({c for c in matrix.countries} | {c for _, c in matrix.routes})
+    operators = sorted(matrix.operators)
+    out: list[Check] = []
+
+    # --- Турвизор: один вызов справочников на всё -----------------------------------
+    provider = tv.TourvisorApiProvider()
+    proxy = pool().acquire()
+    async with httpx.AsyncClient(timeout=60, proxy=proxy.url if proxy else None,
+                                 headers={"Referer": tv.REFERER,
+                                          "User-Agent": tv.DESKTOP_UA}) as client:
+        lists = await provider._reference(client)
+        miss_c = [c for c in cities
+                  if tv._find_id(tv._items(lists, "departures", "departure"), c) is None]
+        miss_s = [c for c in countries
+                  if tv._find_id(tv._items(lists, "allcountry", "country"), c) is None]
+        miss_o = [o for o in operators if provider._operator_id(lists, o) is None]
+    out.append(Check("А9а: города в словаре Турвизора", not miss_c, f"нет: {miss_c or '—'}"))
+    out.append(Check("А9б: страны в словаре Турвизора", not miss_s, f"нет: {miss_s or '—'}"))
+    out.append(Check("А9в: операторы в словаре Турвизора", not miss_o, f"нет: {miss_o or '—'}"))
+
+    # --- Слетать: город + страны на каждый город --------------------------------------
+    sl = SletatApiProvider()
+    proxy = pool().acquire()
+    bad: list[str] = []
+    async with httpx.AsyncClient(timeout=60, headers={"Referer": "https://sletat.ru/"},
+                                 proxy=proxy.url if proxy else None) as client:
+        for city in cities:
+            try:
+                city_id = await sl._resolve_city(client, city)
+            except Exception:
+                bad.append(f"{city}: город не резолвится")
+                continue
+            for country in countries:
+                try:
+                    await sl._resolve_country(client, city_id, country)
+                except Exception:
+                    bad.append(f"{city} → {country}")
+    out.append(Check("А9г: направления в справочнике Слетать", not bad,
+                     "; ".join(bad[:8]) or "все пары резолвятся"))
+    return out

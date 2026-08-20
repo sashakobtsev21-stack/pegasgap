@@ -110,6 +110,13 @@ _SIGNATURES: list[tuple[str, str, re.Pattern[str], object]] = [
      re.compile(r"Error while parsing tour"), None),
     ("towns_unresolved", "курорты не опознаны в справочнике плагина",
      re.compile(r"Local towns doesn't contain any local keys"), None),
+    # Две сигнатуры сняты с ЖИВОГО прогона Sunmar (сверка Е4 через Kibana): это причины
+    # других семейств плагинов, во флоу-доке Pegas их нет.
+    ("rows_capped", "выдача оператора упёрлась в лимит строк",
+     re.compile(r"Reached max recommended rows count limit \((\d+)\)"),
+     lambda m: f"плагин остановил добор на {m.group(1)} строках — хвост выдачи не читался"),
+    ("no_linked_hotels", "поиск шёл без фильтра отелей",
+     re.compile(r"Empty HotelIds in linked data"), None),
     ("destinations_unavailable", "курорты недоступны у оператора",
      re.compile(r"Destinations with ids: .* are not available"), None),
 ]

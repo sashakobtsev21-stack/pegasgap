@@ -154,6 +154,8 @@ def offer_facts(blocks: list[dict], operators: dict[int, str] | None = None
     facts: list[OfferFacts] = []
     for block in blocks:
         for row in block.get("hotel") or []:
+            if not isinstance(row, dict):
+                continue
             for tour in row.get("tour") or []:
                 facts.append(OfferFacts(
                     checkin=_parse_day(tour.get("dt")),
@@ -209,7 +211,7 @@ def _hotel_codes(blocks: list[dict]) -> set[int]:
         code
         for block in blocks
         for row in (block.get("hotel") or [])
-        if (code := _to_int(row.get("id"))) is not None
+        if isinstance(row, dict) and (code := _to_int(row.get("id"))) is not None
     }
 
 
@@ -230,6 +232,10 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
         if operator_id is not None and _to_decimal(block.get("operator")) != operator_id:
             continue
         for row in block.get("hotel") or []:
+            if not isinstance(row, dict):
+                # Битый элемент — потеря одной строки, а не всего прогона: исключение
+                # здесь превращало мусор в ответе в несостоявшуюся проверку.
+                continue
             ref = hotels.get(row.get("id"))
             if not ref:
                 continue
@@ -616,6 +622,15 @@ class TourvisorApiProvider:
             if not finished:
                 return blocks, True, False     # оборвались на середине — выдача неполная
             codes = _hotel_codes(page_blocks)
+            if seen - codes:
+                # Кумулятивность нарушена: очередная страница ПОТЕРЯЛА уже виденные
+                # отели, хотя обязана содержать всё с начала. Продолжать нельзя — мы бы
+                # молча заместили выдачу урезанной; берём то, что успели, и честно
+                # помечаем недобор.
+                log.warning("Tourvisor (json): страница потеряла %d уже виденных "
+                            "отелей — кумулятивность нарушена, выдача помечена неполной",
+                            len(seen - codes))
+                return blocks, True, False
             if not codes - seen:
                 return blocks, True, _page_is_whole(advanced, seen)
             advanced = True

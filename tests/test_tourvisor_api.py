@@ -113,3 +113,44 @@ def test_a_page_that_did_not_even_fill_is_complete():
 def test_pagination_that_worked_proves_the_end():
     """Сдвинулась хоть раз — исчерпание прироста означает конец: страницы кончились."""
     assert tourvisor_api._page_is_whole(advanced=True, seen=set(range(594)))
+
+
+async def test_page_that_loses_seen_hotels_marks_the_read_incomplete(monkeypatch):
+    """Ответ `nextpage` кумулятивен — каждая страница содержит всё с начала. Страница,
+    потерявшая уже виденные отели, означает сбой листания: молча заместить выдачу
+    урезанной нельзя, недобор помечается."""
+    provider = tourvisor_api.TourvisorApiProvider()
+
+    def page(ids):
+        return [{"operator": 12, "hotel": [{"id": i, "price": 100} for i in ids]}]
+
+    pages = iter([(page([1, 2, 3]), True), (page([2]), True)])
+
+    async def fake_await(self, client, request_id, referrer):
+        return next(pages)
+
+    async def fake_get(self, client, url, referrer=None, **query):
+        return {"result": {"requestid": 777}}
+
+    monkeypatch.setattr(tourvisor_api.TourvisorApiProvider, "_await_result", fake_await)
+    monkeypatch.setattr(tourvisor_api.TourvisorApiProvider, "_get", fake_get)
+    blocks, finished, complete = await provider._collect_pages(None, 1, "ref")
+    assert finished and not complete            # честный недобор, не «полная выдача»
+    assert tourvisor_api._hotel_codes(blocks) == {1, 2, 3}   # сохранили лучшее из виденного
+
+
+def test_garbage_blocks_do_not_crash_the_builder():
+    """Л3 плана: битый ответ обязан дать честный ноль, а не исключение посреди прогона."""
+    junk = [
+        {"operator": "мусор", "hotel": "не список"},
+        {"hotel": [{"id": "не число", "price": "мусор"},
+                   {"id": 5, "price": -10},
+                   {"id": 6},
+                   "строка вместо отеля"]},
+        {},
+        None,
+    ]
+    blocks = [b for b in junk if isinstance(b, dict)]
+    assert tourvisor_api.build_hotel_offers(blocks, {}, None) == []
+    assert tourvisor_api._hotel_codes(blocks) == {5, 6}
+    assert tourvisor_api.offer_facts(blocks) == []
