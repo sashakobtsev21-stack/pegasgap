@@ -8,7 +8,7 @@
 from decimal import Decimal
 
 from pegasgap.catalog import CatalogHotel
-from pegasgap.diagnosis import CatalogIndex, diagnose, diagnose_gap
+from pegasgap.diagnosis import CatalogIndex, diagnose, diagnose_gap, diagnose_reverse, reverse_index
 from pegasgap.gaps import MATCH_COLLAPSE_MARKER
 from pegasgap.linking import Direction, LinkSet
 from pegasgap.models import (
@@ -286,3 +286,46 @@ def test_direction_registered_only_without_flight():
     diagnose(scan, CATALOG, LinkSet.unavailable(),
              Direction(known=True, with_flight=False, without_flight=True))
     assert any("не в режиме" in n for n in scan.notes)
+
+
+# --- Причина «отеля нет на Турвизоре» — по словарю самой витрины ---------------------
+
+THEIR = {
+    71351: {"name": "ATLANTIS ROYAL", "stars": 3},
+    52905: {"name": "ROYAL ATLANTIS BEACH", "stars": 4},
+}
+
+
+def reverse_scan(name: str) -> ScanResult:
+    g = HotelGap(kind=GapKind.REVERSE, hotel_name=name,
+                 checked_price=Decimal("125716"))
+    return scan_with([g])
+
+
+def test_listed_but_without_tours_is_named_so():
+    """Живой Atlantis Royal: в словаре витрины отель есть, а поиск, прижатый к нему,
+    возвращает ноль туров и на широкое окно. Находка верная — но без причины она
+    читалась как ошибка инструмента."""
+    scan = reverse_scan("Atlantis Royal Hotel")
+    diagnose_reverse(scan, reverse_index(THEIR))
+    gap = scan.gaps[0]
+    assert gap.diagnosis is HotelDiagnosis.REF_LISTED_NO_TOURS
+    assert gap.reference_hotel_id == 71351          # ссылка прижмётся к отелю
+    assert "ATLANTIS ROYAL" in gap.note
+
+
+def test_unknown_hotel_is_ours_alone():
+    scan = reverse_scan("Гранд Пляж Юг")
+    diagnose_reverse(scan, reverse_index(THEIR))
+    assert scan.gaps[0].diagnosis is HotelDiagnosis.REF_NOT_IN_DICTIONARY
+
+
+def test_shaky_candidate_is_offered_for_review():
+    """Похожее имя в словаре есть, но совпадение шаткое: предлагаем кандидата, а не
+    утверждаем — это ровно та «предполагаемая причина», которую просит разбор."""
+    scan = reverse_scan("Atlantis Beach")
+    diagnose_reverse(scan, reverse_index(THEIR))
+    gap = scan.gaps[0]
+    assert gap.diagnosis in (HotelDiagnosis.REF_MAYBE_NAMED,
+                             HotelDiagnosis.REF_LISTED_NO_TOURS)
+    assert gap.reference_hotel_id is not None

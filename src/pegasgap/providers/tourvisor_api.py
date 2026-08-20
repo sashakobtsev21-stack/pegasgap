@@ -657,6 +657,30 @@ def _items(lists: dict, group: str, key: str) -> list[dict]:
     return [i for i in (node or []) if isinstance(i, dict)]
 
 
+async def fetch_country_hotels(country: str) -> dict[int, dict]:
+    """Словарь отелей страны НА ВИТРИНЕ (id → запись) — для разбора обратных находок.
+
+    «Отеля нет на Турвизоре» само по себе не говорит почему: витрина может не знать
+    отель вовсе, знать под другим именем, а может знать и просто не иметь туров. Различие
+    делается по её же словарю. Пустой ответ означает «не смогли прочитать», и вызывающий
+    оставляет диагноз пустым, а не выдумывает его.
+    """
+    provider = TourvisorApiProvider()
+    proxy = pool().acquire()
+    try:
+        async with httpx.AsyncClient(
+                timeout=90, proxy=proxy.url if proxy else None,
+                headers={"Referer": REFERER, "User-Agent": DESKTOP_UA}) as client:
+            lists = await provider._reference(client)
+            country_id = _find_id(_items(lists, "allcountry", "country"), country)
+            if country_id is None:
+                return {}
+            return await provider._hotels(client, country_id)
+    except Exception as exc:
+        log.warning("словарь отелей витрины не получен (%s)", type(exc).__name__)
+        return {}
+
+
 async def fetch_tour_room(tour_id: str | None) -> str | None:
     """Название номера конкретного тура («стандарт 2 местный») — через actualize.
 

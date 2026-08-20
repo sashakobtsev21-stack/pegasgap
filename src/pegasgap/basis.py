@@ -24,7 +24,9 @@ from __future__ import annotations
 import re
 from datetime import date
 from decimal import Decimal
+from difflib import SequenceMatcher
 
+from pegasgap.matching import translit
 from pegasgap.models import DayOffer
 
 # Базовые коды питания в порядке «от пустого к полному». Обе площадки живут в этой
@@ -80,10 +82,14 @@ _SPLIT = re.compile(r"[^0-9a-zа-яё]+", re.IGNORECASE)
 def room_tags(name: str | None) -> frozenset[str]:
     """Категории, которые название номера сообщает о себе. Пусто — сигнала нет."""
     tokens = [t for t in _SPLIT.split(str(name or "").lower()) if t]
+    # Совпадение в обе стороны: «эконом» длиннее стема «econom» не бывает, а вот «eco»
+    # КОРОЧЕ него — живой номер «eco room» без обратной проверки оставался без категории.
+    # Три буквы минимум, иначе «e» пометило бы всё подряд.
     return frozenset(
         category
         for category, stems in _CATEGORY_STEMS.items()
-        if any(token.startswith(stem) for token in tokens for stem in stems)
+        if any(token.startswith(stem) or (len(token) >= 3 and stem.startswith(token))
+               for token in tokens for stem in stems)
     )
 
 
@@ -97,6 +103,36 @@ def rooms_differ(a: str | None, b: str | None) -> bool:
     """
     ta, tb = room_tags(a), room_tags(b)
     return bool(ta) and bool(tb) and not (ta & tb)
+
+
+# Порог нечёткого совпадения названий номеров в общем алфавите. «Superior Room Sea
+# View» против «superior swim up room sea view» дают 0.87, чужие названия — около нуля.
+_ROOM_FUZZY = 0.8
+
+
+def _room_key(name: str | None) -> str:
+    return " ".join(_SPLIT.split(translit(str(name or "").lower()))).strip()
+
+
+def rooms_alike(a: str | None, b: str | None) -> bool:
+    """Положительное свидетельство, что это ОДИН номер, — не отсутствие противоречия.
+
+    Разница принципиальная: `rooms_differ` умеет только опровергать, и пара «Jasmine
+    Pool View» против «camelia family superior» проходила у него как «не противоречит» —
+    ни одного словарного слова категории, опровергать нечем. Но это заведомо разные
+    номера, и утверждение «цена расходится» на такой паре не стоит ничего.
+
+    Один номер — это либо одинаковый НАБОР категорий (не пересечение: {family, suite}
+    против {family, superior} пересекаются по family, оставаясь разными номерами), либо
+    почти одинаковое написание в общем алфавите.
+    """
+    ta, tb = room_tags(a), room_tags(b)
+    if ta and tb and ta == tb:
+        return True
+    ka, kb = _room_key(a), _room_key(b)
+    if not ka or not kb:
+        return False
+    return SequenceMatcher(None, ka, kb).ratio() >= _ROOM_FUZZY
 
 
 def add_day_offer(target: dict[date, list[DayOffer]], day: date | None,

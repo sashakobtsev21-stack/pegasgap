@@ -527,6 +527,10 @@ def detect(
                 resort=h.destination,
                 checked_price=h.price,
                 currency=h.currency,
+                # Наш id и заезд — иначе ссылка «на Слетать» вела на общий поиск из
+                # сотен строк, в котором находку ещё надо разыскать.
+                catalog_id=_as_int(h.raw_label),
+                checked_checkin=h.checkin,
                 note="есть в нашей выдаче, на Турвизоре отеля нет",
             )
             for h in sorted(match.only_checked, key=lambda h: h.price)

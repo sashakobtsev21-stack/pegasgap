@@ -4,7 +4,7 @@
 написаниях обеих площадок, а не на выдуманных.
 """
 
-from pegasgap.basis import normalize_meal, room_tags, rooms_differ
+from pegasgap.basis import normalize_meal, room_tags, rooms_alike, rooms_differ
 
 # --------------------------------- питание ---------------------------------
 
@@ -59,3 +59,29 @@ def test_no_signal_means_no_refutation():
 def test_suite_family_speaks_both_scripts():
     assert not rooms_differ("Сюит Вид на Территорию", "Deluxe Suite")
     assert rooms_differ("Сюит Вид на Территорию", "Promo Room")
+
+
+# --------------------------------- один ли это номер ---------------------------------
+
+
+def test_alike_needs_positive_evidence_not_absence_of_clash():
+    """«Jasmine Pool View» против «camelia family superior» опровергнуть нечем — ни
+    одного словарного слова категории у первой. Но и совпадением это не является."""
+    assert not rooms_differ("Jasmine Pool View", "camelia family superior")
+    assert not rooms_alike("Jasmine Pool View", "camelia family superior")
+
+
+def test_alike_by_matching_category_sets():
+    assert rooms_alike("eco room", "Двухместный Эконом")
+    assert rooms_alike("стандарт 2 местный", "Стандартный номер")
+
+
+def test_overlapping_but_unequal_categories_are_not_alike():
+    """{family, suite} и {family, superior} пересекаются по family, оставаясь разными
+    номерами — пересечения мало, нужен одинаковый набор."""
+    assert not rooms_alike("Family Suite", "Family Superior")
+
+
+def test_alike_by_nearly_identical_names_without_categories():
+    assert rooms_alike("family roof suite with jacuzzi", "Family Roof Suite With Jacuzzi")
+    assert rooms_alike("superior swim up room sea view", "Superior Room Sea View")

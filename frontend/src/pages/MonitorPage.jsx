@@ -256,6 +256,7 @@ export default function MonitorPage() {
                   <th className="py-2 pr-3 font-semibold">Туристы</th>
                   <th className="py-2 pr-3 font-semibold">Класс</th>
                   <th className="py-2 pr-3 font-semibold">Отель</th>
+                  <th className="py-2 pr-3 font-semibold">Причина</th>
                   <th className="py-2 font-semibold">Цены</th>
                 </tr>
               </thead>
@@ -344,6 +345,24 @@ export default function MonitorPage() {
                           )}
                         </div>
                       </td>
+                      {/* Предполагаемая причина расхождения: вердикт разбора и его
+                          подробности — под каким именем отель у другой стороны, что
+                          именно не нашлось. Без этой колонки находка требует веры на
+                          слово, а первый же спорный случай (Atlantis Royal) выглядел
+                          ошибкой инструмента, будучи верным. */}
+                      <td className="py-2 pr-3 max-w-[280px] text-xs">
+                        {g.head.diagnosis_title && (
+                          <div className="text-ink">{g.head.diagnosis_title}</div>
+                        )}
+                        {g.head.note && (
+                          <div className="mt-0.5 text-[11px] leading-snug text-muted">
+                            {g.head.note}
+                          </div>
+                        )}
+                        {!g.head.diagnosis_title && !g.head.note && (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="py-2 whitespace-nowrap text-xs">
                         <Prices f={g.head} />
                       </td>
@@ -370,6 +389,7 @@ export default function MonitorPage() {
                                className="text-ocean hover:underline">Турвизор</a>
                           )}
                         </td>
+                        <td className="py-1.5 pr-3 text-[11px] text-muted">{f.note || ""}</td>
                         <td className="py-1.5"><Prices f={f} /></td>
                       </tr>
                     ))}

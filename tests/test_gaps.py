@@ -535,3 +535,15 @@ def test_comparison_picks_the_cheapest_shared_meal():
     scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
     # Сошлись RO против RO (70000 → 71400, +2%), а не AI против RO.
     assert scan.price_offset_pct == 2.0
+
+
+def test_reverse_gap_carries_our_hotel_id_and_checkin():
+    """Без них ссылка «на Слетать» вела на общий поиск из сотен строк — живой пример
+    Atlantis Royal: находка есть, а открыть её негде."""
+    chk = hotel("C Beach", "95000", "sletat")
+    chk.raw_label = "119025"
+    scan = detect(PARAMS, result("tourvisor", [hotel("A Palace", "100000", "tourvisor")]),
+                  result("sletat", [hotel("A Palace", "100000", "sletat"), chk]))
+    gap = scan.gaps_of(GapKind.REVERSE)[0]
+    assert gap.catalog_id == 119025
+    assert gap.checked_checkin == CHECKIN

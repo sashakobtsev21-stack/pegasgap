@@ -351,6 +351,11 @@ class HotelDiagnosis(StrEnum):
     # «мы не смотрели» значит терять то, что выяснили.
     IN_CATALOG_UNCHECKED = "in_catalog_unchecked"
     UNCERTAIN = "uncertain"                # со справочником уверенно не сопоставился
+    # Диагнозы обратной стороны — «отеля нет на Турвизоре». Набор свой: справочники
+    # Слетать тут ни при чём, вопрос к витрине, и разбирается он по ЕЁ словарю отелей.
+    REF_LISTED_NO_TOURS = "ref_listed_no_tours"      # у витрины заведён, туров нет
+    REF_MAYBE_NAMED = "ref_maybe_named"              # возможно, у витрины другое имя
+    REF_NOT_IN_DICTIONARY = "ref_not_in_dictionary"  # витрина такого отеля не знает
     UNKNOWN = "unknown"                    # проверка не выполнялась
 
     @property
@@ -362,6 +367,9 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.LINKED_NO_OFFER: "линкован, тура нет",
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "есть в справочнике",
             HotelDiagnosis.UNCERTAIN: "не опознан",
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "у витрины без туров",
+            HotelDiagnosis.REF_MAYBE_NAMED: "возможно, другое имя",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "нет в словаре витрины",
             HotelDiagnosis.UNKNOWN: "не проверялось",
         }[self]
 
@@ -382,6 +390,14 @@ class HotelDiagnosis(StrEnum):
             HotelDiagnosis.IN_CATALOG_UNCHECKED: "отель в справочнике есть; вероятнее всего "
                                                  "нет линковки с каталогом оператора",
             HotelDiagnosis.UNCERTAIN: "возможно, отель у нас есть под другим названием",
+            HotelDiagnosis.CATALOG_DISABLED: "отель выключен в справочнике Слетать — его не "
+                                             "покажут, сколько бы туров ни было",
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "в словаре витрины отель есть, но туров "
+                                                "на эти даты её поиск не возвращает",
+            HotelDiagnosis.REF_MAYBE_NAMED: "точного имени в словаре витрины нет, но есть "
+                                            "похожее — возможен другой матчинг названий",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "витрина такого отеля не знает вовсе — "
+                                                  "его нет даже в её словаре",
             HotelDiagnosis.UNKNOWN: "причина не разобрана — не было доступа к справочникам",
         }[self]
 
@@ -396,6 +412,13 @@ class HotelDiagnosis(StrEnum):
                                                  "(нужен доступ к плагинной базе)",
             HotelDiagnosis.UNCERTAIN: "сверить название вручную: возможно, отель у нас есть "
                                       "под другим именем",
+            HotelDiagnosis.CATALOG_DISABLED: "включить отель в справочнике либо подтвердить, "
+                                             "что выключен намеренно",
+            HotelDiagnosis.REF_LISTED_NO_TOURS: "открыть ссылку на витрину — поиск прижат "
+                                                "к отелю; вопрос к наполнению витрины",
+            HotelDiagnosis.REF_MAYBE_NAMED: "сверить название с кандидатом из словаря витрины",
+            HotelDiagnosis.REF_NOT_IN_DICTIONARY: "ничего: отеля на витрине нет, "
+                                                  "преимущество на нашей стороне",
             HotelDiagnosis.UNKNOWN: "запустить с доступом к справочникам",
         }[self]
 

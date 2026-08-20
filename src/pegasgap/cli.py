@@ -24,7 +24,7 @@ from rich.table import Table
 from pegasgap import report as reporting
 from pegasgap import storage
 from pegasgap.catalog import fetch_catalog, resolve_country_id
-from pegasgap.diagnosis import diagnose
+from pegasgap.diagnosis import diagnose, diagnose_reverse, reverse_index
 from pegasgap.gaps import detect
 from pegasgap.linking import load_direction, load_links
 from pegasgap.logging_setup import configure_logging
@@ -32,6 +32,7 @@ from pegasgap.models import PEGAS, GapKind, ScanResult, SearchParams
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.pluginlog import fetch_causes
 from pegasgap.providers.sletat_api import GATEWAY_CITY
+from pegasgap.providers.tourvisor_api import fetch_country_hotels
 from pegasgap.ranking import (
     RouteVolume,
     VolumeProbe,
@@ -101,6 +102,11 @@ async def _diagnose(scan: ScanResult) -> None:
     """Проставить отельным пропускам причину по справочникам. Ошибки не фатальны."""
     # Номера ценовых находок сверяются с самой витриной — см. roomcheck.
     await pin_rooms(scan)
+    # Обратная сторона разбирается по словарю ВИТРИНЫ: «нет на Турвизоре» без причины
+    # читается как ошибка инструмента, что показал живой Atlantis Royal.
+    if scan.gaps_of(GapKind.REVERSE):
+        their_hotels = await fetch_country_hotels(scan.params.destination_country)
+        diagnose_reverse(scan, reverse_index(their_hotels))
     country_id = await resolve_country_id(scan.params.destination_country)
     catalog = await fetch_catalog(country_id) if country_id else []
     # Чтение базы блокирующее — уводим в поток, чтобы не морозить цикл событий, когда

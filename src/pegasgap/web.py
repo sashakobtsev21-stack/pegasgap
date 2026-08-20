@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from pegasgap import queue as case_queue
 from pegasgap import storage
 from pegasgap.catalog import fetch_catalog, resolve_country_id
-from pegasgap.diagnosis import diagnose
+from pegasgap.diagnosis import diagnose, diagnose_reverse, reverse_index
 from pegasgap.events import bus
 from pegasgap.gaps import detect
 from pegasgap.linking import load_direction, load_links
@@ -42,6 +42,7 @@ from pegasgap.models import (
 )
 from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.pluginlog import fetch_causes
+from pegasgap.providers.tourvisor_api import fetch_country_hotels
 from pegasgap.proxies import pool, reload_pool
 from pegasgap.roomcheck import pin_rooms
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
@@ -118,6 +119,11 @@ async def _diagnose(scan: ScanResult) -> None:
     # Номера ценовых находок сверяются с витриной ДО раннего выхода: прогону с одними
     # ценовыми находками отельный разбор не нужен, а сверка номеров — нужна.
     await pin_rooms(scan)
+    # Обратная сторона разбирается по словарю ВИТРИНЫ: «нет на Турвизоре» без причины
+    # читается как ошибка инструмента, что показал живой Atlantis Royal.
+    if scan.gaps_of(GapKind.REVERSE):
+        their_hotels = await fetch_country_hotels(scan.params.destination_country)
+        diagnose_reverse(scan, reverse_index(their_hotels))
     if not scan.gaps_of(GapKind.HOTEL):
         return
     country_id = await resolve_country_id(scan.params.destination_country)
@@ -583,10 +589,10 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
                     # Причина словами и что делать — иначе находка требует знания того,
                     # как устроен разбор, чтобы понять ярлык.
                     "cause": (HotelDiagnosis(r["diagnosis"]).cause
-                              if r["kind"] == GapKind.HOTEL.value else GapKind(r["kind"]).hint),
+                              if r["diagnosis"] != HotelDiagnosis.UNKNOWN.value
+                              else GapKind(r["kind"]).hint),
                     "action": (HotelDiagnosis(r["diagnosis"]).action
-                               if r["kind"] == GapKind.HOTEL.value
-                               and r["diagnosis"] != HotelDiagnosis.UNKNOWN.value else None),
+                               if r["diagnosis"] != HotelDiagnosis.UNKNOWN.value else None),
                     # Цены сторон как есть. Проценты без них нечитаемы: «+34.4%» не
                     # говорит ни сколько стоит тур, ни где он дороже.
                     "reference_price": (float(r["reference_price"])

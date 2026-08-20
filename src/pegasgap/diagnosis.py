@@ -181,6 +181,59 @@ def refute_match_collapse(scan: ScanResult, targets: list[HotelGap]) -> None:
         f"и дело не в матчинге, а в отсутствии предложений у оператора")
 
 
+def reverse_index(their_hotels: dict[int, dict]) -> CatalogIndex:
+    """Словарь витрины — в тот же индекс, каким разбираются наши пропуски.
+
+    Матчер единый на весь инструмент намеренно: иначе один и тот же отель считался бы
+    то тем же, то другим в зависимости от того, где его сравнивают.
+    """
+    hotels: list[CatalogHotel] = []
+    for hid, ref in their_hotels.items():
+        name = str(ref.get("name") or "").strip()
+        if not name:
+            continue
+        try:
+            stars = int(ref.get("stars")) or None
+        except (TypeError, ValueError):
+            stars = None
+        hotels.append(CatalogHotel(id=int(hid), name=name, stars=stars, town_id=None))
+    return CatalogIndex(hotels)
+
+
+def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
+    """Причина «отеля нет на Турвизоре» — по словарю самой витрины.
+
+    Живой случай, из-за которого разбор появился: Atlantis Royal Hotel значился «нет на
+    Турвизоре», при этом в СЛОВАРЕ витрины он есть (ATLANTIS ROYAL, id 71351) — а её
+    поиск, прижатый к отелю, честно возвращает ноль туров и на широкое окно. То есть
+    находка была верной, но без причины читалась как ошибка инструмента.
+
+    Заодно ставится их id отеля: ссылка «на Турвизоре» прижимается к отелю и открывает
+    ровно ту пустую выдачу, которая находку и доказывает.
+    """
+    targets = scan.gaps_of(GapKind.REVERSE)
+    if not targets or not index:
+        return
+    counts: dict[str, int] = defaultdict(int)
+    for gap in targets:
+        hotel, confidence = index.find(gap)
+        if hotel is None or confidence is Confidence.NONE:
+            gap.diagnosis = HotelDiagnosis.REF_NOT_IN_DICTIONARY
+            gap.note = "в словаре витрины ничего похожего — отель есть только у нас"
+        elif confidence.comparable:
+            gap.diagnosis = HotelDiagnosis.REF_LISTED_NO_TOURS
+            gap.reference_hotel_id = hotel.id
+            gap.note = (f"у витрины заведён как «{hotel.name}» (id {hotel.id}), "
+                        f"но туров на эти даты её поиск не вернул")
+        else:
+            gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED
+            gap.reference_hotel_id = hotel.id
+            gap.note = (f"возможно, у витрины это «{hotel.name}» (id {hotel.id}) — "
+                        f"совпадение неуверенное, сверить название")
+        counts[gap.diagnosis.value] += 1
+    log.info("диагноз по %d обратным находкам: %s", len(targets), dict(counts))
+
+
 def diagnose(scan: ScanResult, catalog: list[CatalogHotel], links: LinkSet,
              direction: Direction | None = None) -> ScanResult:
     """Разобрать причины всех отельных пропусков прогона.
