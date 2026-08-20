@@ -98,12 +98,12 @@ async def pin_rooms(scan: ScanResult, fetch: Fetcher = fetch_tour_room) -> None:
         sample = settled[0]
         scan.notes.append(
             f"снято ценовых расхождений: {len(settled)} — на одинаковом номере цены "
-            f"сходятся, разница была номером (например {sample.hotel_name}: витрина "
-            f"показала «{sample.reference_room}» дешевле нашего «{sample.checked_room}»)")
+            f"сходятся, разница была номером (например {sample.hotel_name}: Турвизор "
+            f"показал «{sample.reference_room}» дешевле нашего «{sample.checked_room}»)")
     if missing:
         sample = missing[0]
         scan.notes.append(
-            f"снято ценовых расхождений: {len(missing)} — номера витрины у нас нет, "
+            f"снято ценовых расхождений: {len(missing)} — показанного Турвизором номера у нас нет, "
             f"сравнивать не с чем (например {sample.hotel_name}: "
             f"«{sample.reference_room}»)")
     if settled or missing:

@@ -69,7 +69,7 @@ async def test_room_we_do_not_sell_removes_the_finding_with_a_note():
     scan = scan_with([price_gap("Стандартный номер")])
     await pin_rooms(scan, fetcher("Promo Room"))
     assert scan.gaps == []
-    assert any("номера витрины у нас нет" in n for n in scan.notes)
+    assert any("показанного Турвизором номера у нас нет" in n for n in scan.notes)
 
 
 @pytest.mark.asyncio
@@ -111,7 +111,7 @@ async def test_other_meal_or_day_does_not_count_as_the_same_room():
                             room="Camelia Family Superior")])
     await pin_rooms(scan, fetcher("camelia family superior"))
     assert scan.gaps == []
-    assert any("номера витрины у нас нет" in n for n in scan.notes)
+    assert any("показанного Турвизором номера у нас нет" in n for n in scan.notes)
 
 
 @pytest.mark.asyncio

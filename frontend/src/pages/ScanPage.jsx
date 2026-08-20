@@ -32,172 +32,18 @@ function isoInDays(days) {
  * Отчёт на эту страницу не выносим: смешивать «что запустить» и «что нашлось» — значит
  * получить экран, на котором не делается толком ни то, ни другое.
  */
-// Регулярный обход первым и по умолчанию: это основной режим работы инструмента, ради
-// него он и существует. Точечная проверка — разбор конкретной жалобы, дело нечастое.
-// Название то же, что в конфиге и README, чтобы термин не расползся в два.
-const MODES = [
-  { id: "full", label: "Регулярный обход", icon: ListChecks },
-  { id: "single", label: "Одно направление", icon: Search },
-];
-
+/**
+ * Единственный режим — регулярный обход. Точечная проверка одного направления убрана
+ * из интерфейса по решению владельца: инструмент существует ради обхода, а разовые
+ * вопросы разбираются по находкам мониторинга (обе ссылки прижаты к отелю) или командой
+ * `pegasgap scan` из консоли.
+ */
 export default function ScanPage() {
-  const [mode, setMode] = useState("full");
   return (
     <m.div variants={staggerContainer} initial="hidden" animate="show"
            className="mx-auto max-w-3xl space-y-4">
-      <GlassCard variants={fadeUp} className="p-2" overflow="visible">
-        <div className="flex gap-1">
-          {MODES.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setMode(id)}
-              className={[
-                "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors",
-                mode === id
-                  ? "bg-gradient-to-r from-brand to-ocean text-white shadow-glow"
-                  : "text-muted hover:bg-white/5 hover:text-ink",
-              ].join(" ")}
-            >
-              <Icon className="size-4" /> {label}
-            </button>
-          ))}
-        </div>
-      </GlassCard>
-
-      {mode === "single" ? <SingleScan /> : <FullScan />}
+      <FullScan />
     </m.div>
-  );
-}
-
-/** Точечная проверка — разбор конкретной жалобы: параметры на входе, ответ сразу. */
-function SingleScan() {
-  const [refdata, setRefdata] = useState(null);
-  const [form, setForm] = useState({
-    country: "Турция",
-    departure: "Москва",
-    date_from: isoInDays(30),
-    date_to: isoInDays(37),
-    nights: 7,
-    adults: 2,
-    mode: "tours",
-    operator: "",
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    getJson("/api/refdata").then((j) => alive && setRefdata(j)).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const countries = refdata?.countries?.length ? refdata.countries : COUNTRIES;
-  const cities = refdata?.departure_cities?.length ? refdata.departure_cities : DEPARTURE_CITIES;
-  const operators = refdata?.operators?.length ? refdata.operators : ["Pegas Touristik"];
-  // Пустое значение в форме = «первый из конфига», решает бэк. Как только справочник
-  // приехал, подставляем явно — иначе в поле висел бы пустой выбор.
-  const operator = form.operator || operators[0];
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const { run_id } = await postJson("/api/scan", {
-        ...form, operator,
-        nights: Number(form.nights), adults: Number(form.adults),
-      });
-      navigate(`/run/${run_id}`);
-    } catch (err) {
-      setError(String(err.message || err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <GlassCard variants={fadeUp} className="p-6" overflow="visible">
-      <div className="mb-5 flex items-center gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-deep shadow-glow">
-          <Search className="size-5 text-white" />
-        </span>
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-white">
-            Проверить направление
-          </h1>
-          <p className="text-xs text-muted">
-            Результат сразу, на этой же странице
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="Туроператор" icon={Building2} className="min-w-0">
-          <Select icon value={operator} onChange={set("operator")}>
-            {operators.map((o) => <option key={o} value={o}>{o}</option>)}
-          </Select>
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Страна" icon={Globe2} className="min-w-0">
-            <Select icon searchable value={form.country} onChange={set("country")}>
-              {countries.map((c) => <option key={c} value={c}>{c}</option>)}
-            </Select>
-          </Field>
-          <Field label="Город вылета" icon={PlaneTakeoff} className="min-w-0">
-            <Select icon searchable value={form.departure} onChange={set("departure")}>
-              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
-            </Select>
-          </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Вылет с" icon={CalendarDays} className="min-w-0">
-            <DatePicker icon value={form.date_from} min={isoInDays(0)}
-                        onChange={set("date_from")} />
-          </Field>
-          <Field label="Вылет по" icon={CalendarDays} className="min-w-0">
-            <DatePicker icon value={form.date_to} min={form.date_from}
-                        onChange={set("date_to")} />
-          </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Ночей" icon={Moon} className="min-w-0">
-            <Input icon type="number" min={1} max={30} value={form.nights}
-                   onChange={set("nights")} />
-          </Field>
-          <Field label="Взрослых" icon={Users} className="min-w-0">
-            <Input icon type="number" min={1} max={6} value={form.adults}
-                   onChange={set("adults")} />
-          </Field>
-          <Field label="Режим" className="min-w-0">
-            <Select value={form.mode} onChange={set("mode")}>
-              <option value="tours">Туры (с перелётом)</option>
-              <option value="hotels">Отели (без перелёта)</option>
-            </Select>
-          </Field>
-        </div>
-
-        {error && (
-          <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
-          </p>
-        )}
-
-        <m.button
-          variants={fadeUp}
-          type="submit"
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-ocean py-3 text-sm font-bold text-white shadow-glow transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {busy
-            ? <><Loader2 className="size-4 animate-spin" /> Идёт проверка — обе площадки параллельно…</>
-            : <><Search className="size-4" /> Проверить</>}
-        </m.button>
-      </form>
-    </GlassCard>
   );
 }
 

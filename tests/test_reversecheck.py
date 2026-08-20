@@ -40,7 +40,7 @@ async def test_found_tours_remove_the_phantom():
     scan = scan_of([reverse("Sette Serenity", 71169), reverse("Atlantis Royal", 71351)])
     await verify_reverse(scan, probe_returning({71169}))
     assert [g.hotel_name for g in scan.gaps] == ["Atlantis Royal"]
-    assert any("листинг витрины был неполон" in n for n in scan.notes)
+    assert any("выдача Турвизора была неполна" in n for n in scan.notes)
 
 
 async def test_empty_probe_confirms_the_findings():

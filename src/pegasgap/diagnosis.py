@@ -239,6 +239,10 @@ _PLACE_TOKENS = frozenset({
     "fethiye", "фетхие", "kusadasi", "кушадасы", "bursa", "бурса", "izmir", "измир",
     "cappadocia", "каппадокия", "sirkeci", "laleli", "sultanahmet", "fatih", "taksim",
     "harbiye",
+    # Египет: «RIXOS SHARM» и «Savoy Sharm» роднит только город.
+    "sharm", "шарм", "sheikh", "шейх", "hurghada", "хургада", "dahab", "дахаб",
+    "makadi", "макади", "marsa", "марса", "alam", "алам", "taba", "таба",
+    "sahl", "hasheesh", "сахл", "хашиш", "naama", "наама", "soma", "сома", "bay", "бей",
 })
 
 
@@ -286,24 +290,24 @@ def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
         if hotel is not None and confidence.comparable:
             gap.diagnosis = HotelDiagnosis.REF_LISTED_NO_TOURS
             gap.reference_hotel_id = hotel.id
-            gap.note = (f"у витрины заведён как «{hotel.name}» (id {hotel.id}), "
-                        f"но туров на эти даты её поиск не вернул")
+            gap.note = (f"на Турвизоре заведён как «{hotel.name}» (id {hotel.id}), "
+                        f"но туров на эти даты его поиск не вернул")
         elif hotel is not None and reason.startswith("названия совпали"):
             # Имя совпало буквально, разошлась только звёздность — данные о звёздах у
             # площадок расходятся сплошь и рядом, и это почти наверняка тот же отель.
             gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED
             gap.reference_hotel_id = hotel.id
-            gap.note = (f"у витрины это же имя — «{hotel.name}» (id {hotel.id}), "
+            gap.note = (f"на Турвизоре это же имя — «{hotel.name}» (id {hotel.id}), "
                         f"{reason.replace('названия совпали, ', '')}; "
                         f"почти наверняка тот же отель, туров у него нет")
         elif hotel is not None and _plausible_candidate(gap, hotel):
             gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED
             gap.reference_hotel_id = hotel.id
-            gap.note = (f"возможно, у витрины это «{hotel.name}» (id {hotel.id}) — "
+            gap.note = (f"возможно, на Турвизоре это «{hotel.name}» (id {hotel.id}) — "
                         f"совпадение неуверенное, сверить название")
         else:
             gap.diagnosis = HotelDiagnosis.REF_NOT_IN_DICTIONARY
-            gap.note = "в словаре витрины ничего убедительно похожего — отель есть только у нас"
+            gap.note = "в справочнике Турвизора ничего убедительно похожего — отель есть только у нас"
         counts[gap.diagnosis.value] += 1
     log.info("диагноз по %d обратным находкам: %s", len(targets), dict(counts))
 

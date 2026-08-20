@@ -108,7 +108,7 @@ export default function GapsPage({ runId }) {
         {data.gaps.length === 0 ? (
           <p className="flex items-center gap-2 py-6 text-sm text-emerald-300">
             <CheckCircle2 className="size-5" />
-            Расхождений не найдено — всё, что витрина показывает по оператору, есть и у нас.
+            Расхождений не найдено — всё, что Турвизор показывает по оператору, есть и у нас.
           </p>
         ) : (
           <>

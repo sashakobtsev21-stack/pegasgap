@@ -465,7 +465,7 @@ function Basis({ f }) {
   if (f.reference_room) {
     parts.push(`номер: «${f.checked_room || "?"}» ≈ «${f.reference_room}»`);
   } else if (f.checked_room) {
-    parts.push(`у нас ${f.checked_room} · номер витрины не сверен`);
+    parts.push(`у нас ${f.checked_room} · номер на Турвизоре не сверен`);
   }
   return <div className="mt-0.5 text-[11px] text-muted">{parts.join(" · ")}</div>;
 }

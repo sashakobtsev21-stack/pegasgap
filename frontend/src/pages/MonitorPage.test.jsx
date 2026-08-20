@@ -86,10 +86,10 @@ describe("MonitorPage", () => {
     })]);
     render(<MonitorPage />);
     expect(await screen.findByText(/заезд 19\.09\.2026 · BB/)).toBeTruthy();
-    expect(screen.getByText(/номер витрины не сверен/)).toBeTruthy();
+    expect(screen.getByText(/номер на Турвизоре не сверен/)).toBeTruthy();
   });
 
-  it("показывает сверенный номер витрины", async () => {
+  it("показывает сверенный номер Турвизора", async () => {
     response = payload([finding({
       reference_checkin: "2026-09-19", checked_checkin: "2026-09-19",
       checked_meal: "RO", checked_room: "Стандартный номер",

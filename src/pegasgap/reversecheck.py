@@ -56,7 +56,7 @@ async def verify_reverse(scan: ScanResult, probe: Probe = probe_hotels_with_tour
         doomed |= {id(g) for g in unprovable}
         scan.notes.append(
             f"снято кандидатов «нет на Турвизоре»: {len(unprovable)} — листинг неполон, "
-            f"а в словаре витрины отель не опознан: проверить нечем")
+            f"а в справочнике Турвизора отель не опознан: проверить нечем")
 
     targets = [g for g in reverse if g.reference_hotel_id]
     if targets:
@@ -83,7 +83,7 @@ async def verify_reverse(scan: ScanResult, probe: Probe = probe_hotels_with_tour
                          len(dropped), len(targets), sample.hotel_name)
                 scan.notes.append(
                     f"снято обратных находок: {len(dropped)} из {len(targets)} — "
-                    f"прижатый поиск НАШЁЛ туры, листинг витрины был неполон "
+                    f"прижатый поиск НАШЁЛ туры, выдача Турвизора была неполна "
                     f"(например {sample.hotel_name}); остальные {confirmed} "
                     f"подтверждены пробой")
             else:

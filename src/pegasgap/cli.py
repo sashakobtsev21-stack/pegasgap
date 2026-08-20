@@ -455,6 +455,32 @@ def doctor(db: Path = typer.Option(Path("pegasgap.db"), help="База нахо�
         raise typer.Exit(code=1)
 
 
+@app.command()
+def candidates(db: Path = typer.Option(Path("pegasgap.db"), help="База находок"),
+               days: int = typer.Option(7, help="Глубина, дней")) -> None:
+    """Кандидаты в словарь синонимов: парные находки с похожими именами."""
+    from pegasgap.candidates import find_candidates
+
+    with storage.session(db) as conn:
+        found = find_candidates(conn, days)
+    if not found:
+        console.print("Парных находок с похожими именами нет.")
+        return
+    table = Table(title=f"Кандидаты в hotel_aliases.yaml · {len(found)}")
+    table.add_column("сходство", justify="right")
+    table.add_column("направление")
+    table.add_column("на Турвизоре")
+    table.add_column("у нас")
+    table.add_column("звёзды")
+    table.add_column("наш курорт")
+    for c in found:
+        stars = f"{c.theirs_stars or '?'}/{c.ours_stars or '?'}" + ("" if c.stars_agree else " ✗")
+        table.add_row(f"{c.score:.2f}", f"{c.operator[:5]} {c.route}",
+                      c.theirs[:44], c.ours[:40], stars, c.ours_resort or "?")
+    console.print(table)
+    console.print("Сверить и внести руками: словарь сильнее правил, ошибка склеит чужое.")
+
+
 @app.command("fill-links")
 def fill_links(
     db: Path = typer.Option(storage.DEFAULT_DB, "--db", help="Файл базы"),
