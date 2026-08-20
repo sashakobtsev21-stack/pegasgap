@@ -79,3 +79,20 @@ def test_sunmar_signatures_from_live_kibana():
 def test_ranges_two_is_not_ranges_zero():
     """Живой прогон: «Ranges count: 2» не должен ловиться сигнатурой «Ranges count: 0»."""
     assert parse_lines(["InternalRequestId: 688380321.\n Ranges count: 2\n Origin"]) == []
+
+
+def test_kibana_settings_are_read_lazily_and_fall_back_to_connector_vars(monkeypatch):
+    """Модульная константа замерзала бы до загрузки .env — слой молча оставался бы
+    выключенным. И учётка подхватывается из переменных MCP-коннектора этой же машины."""
+    from pegasgap import pluginlog
+    for var in ("PEGASGAP_KIBANA_URL", "KIBANA_BASE_URL", "PEGASGAP_KIBANA_API_KEY",
+                "PEGASGAP_KIBANA_USER", "PEGASGAP_KIBANA_PASSWORD",
+                "KIBANA_USERNAME", "KIBANA_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
+    assert not pluginlog.available()
+    monkeypatch.setenv("KIBANA_BASE_URL", "https://kibana.local/s/slt/")
+    monkeypatch.setenv("KIBANA_USERNAME", "u")
+    monkeypatch.setenv("KIBANA_PASSWORD", "p")
+    assert pluginlog.available()
+    assert pluginlog._kibana_url() == "https://kibana.local/s/slt"
+    assert pluginlog._auth() == ("u", "p")

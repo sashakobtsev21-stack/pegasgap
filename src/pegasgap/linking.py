@@ -98,9 +98,13 @@ def connection_settings() -> dict[str, str] | None:
 
     Пароль читается только отсюда и никуда не логируется.
     """
-    server = os.environ.get("PEGASGAP_DB_SERVER")
-    user = os.environ.get("PEGASGAP_DB_USER")
-    password = os.environ.get("PEGASGAP_DB_PASSWORD")
+    # Фолбэк — переменные MCP-коннектора этой же машины (SLETAT_DB_*): инструмент
+    # работает под тем же пользователем, и значения наследуются из системного
+    # окружения, не проходя ни через чат, ни через файлы репозитория.
+    server = os.environ.get("PEGASGAP_DB_SERVER") or os.environ.get("SLETAT_DB_SERVER")
+    user = os.environ.get("PEGASGAP_DB_USER") or os.environ.get("SLETAT_DB_USER")
+    password = (os.environ.get("PEGASGAP_DB_PASSWORD")
+                or os.environ.get("SLETAT_DB_PASSWORD"))
     if not (server and user and password):
         return None
     return {"server": server, "user": user, "password": password}

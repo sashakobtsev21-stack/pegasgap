@@ -43,10 +43,24 @@ from dataclasses import dataclass
 
 log = logging.getLogger("pegasgap.pluginlog")
 
-KIBANA_URL = os.environ.get("PEGASGAP_KIBANA_URL") or ""
-KIBANA_INDEX = os.environ.get("PEGASGAP_KIBANA_INDEX") or "gelf-slt-backend*"
-# Сколько строк тянуть на один поиск. Плагин пишет их десятками, а не тысячами.
-MAX_LINES = int(os.environ.get("PEGASGAP_KIBANA_LINES") or 200)
+# Настройки читаются ЛЕНИВО, при обращении: модульная константа замерзала бы до
+# загрузки `.env` (cli подтягивает его после импортов) и слой молча оставался бы
+# выключенным при заполненном файле.
+
+
+def _kibana_url() -> str:
+    # Фолбэк — переменная MCP-коннектора этой же машины.
+    return (os.environ.get("PEGASGAP_KIBANA_URL")
+            or os.environ.get("KIBANA_BASE_URL") or "").rstrip("/")
+
+
+def _kibana_index() -> str:
+    return os.environ.get("PEGASGAP_KIBANA_INDEX") or "gelf-slt-backend*"
+
+
+def _max_lines() -> int:
+    # Плагин пишет строки десятками, а не тысячами.
+    return int(os.environ.get("PEGASGAP_KIBANA_LINES") or 200)
 
 
 @dataclass(frozen=True)
@@ -159,15 +173,17 @@ def _auth() -> dict[str, str] | tuple[str, str] | None:
     api_key = os.environ.get("PEGASGAP_KIBANA_API_KEY")
     if api_key:
         return {"Authorization": f"ApiKey {api_key}"}
-    user = os.environ.get("PEGASGAP_KIBANA_USER")
-    password = os.environ.get("PEGASGAP_KIBANA_PASSWORD")
+    user = (os.environ.get("PEGASGAP_KIBANA_USER")
+            or os.environ.get("KIBANA_USERNAME"))
+    password = (os.environ.get("PEGASGAP_KIBANA_PASSWORD")
+                or os.environ.get("KIBANA_PASSWORD"))
     if user and password:
         return (user, password)
     return None
 
 
 def available() -> bool:
-    return bool(KIBANA_URL) and _auth() is not None
+    return bool(_kibana_url()) and _auth() is not None
 
 
 async def fetch_causes(request_id: int | None) -> list[LogCause]:
@@ -191,11 +207,12 @@ async def fetch_causes(request_id: int | None) -> list[LogCause]:
         basic = auth
 
     query = {
-        "size": MAX_LINES,
+        "size": _max_lines(),
         "query": {"bool": {"must": [{"match_phrase": {"message": str(request_id)}}]}},
         "sort": [{"@timestamp": {"order": "asc"}}],
     }
-    url = f"{KIBANA_URL.rstrip('/')}/api/console/proxy?path={KIBANA_INDEX}/_search&method=POST"
+    url = (f"{_kibana_url()}/api/console/proxy"
+           f"?path={_kibana_index()}/_search&method=POST")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(url, json=query, headers=headers, auth=basic)
