@@ -44,6 +44,7 @@ from pegasgap.orchestrator import CHECKED, REFERENCE, run_pair
 from pegasgap.pluginlog import fetch_causes
 from pegasgap.providers.tourvisor_api import fetch_country_hotels
 from pegasgap.proxies import pool, reload_pool
+from pegasgap.reversecheck import verify_reverse
 from pegasgap.roomcheck import pin_rooms
 from pegasgap.scenarios import DEFAULT_CONFIG, load_matrix
 from pegasgap.searchlink import search_url_from_row
@@ -124,6 +125,8 @@ async def _diagnose(scan: ScanResult) -> None:
     if scan.gaps_of(GapKind.REVERSE):
         their_hotels = await fetch_country_hotels(scan.params.destination_country)
         diagnose_reverse(scan, reverse_index(their_hotels))
+        # «Нет в листинге» ещё не «нет»: прижатая проба подтверждает или снимает.
+        await verify_reverse(scan)
     if not scan.gaps_of(GapKind.HOTEL):
         return
     country_id = await resolve_country_id(scan.params.destination_country)

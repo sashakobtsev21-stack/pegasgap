@@ -486,7 +486,8 @@ class TourvisorApiProvider:
         return None
 
     async def _start(self, client: httpx.AsyncClient, params: SearchParams, city_id: int,
-                     country_id: int, operator_id: int | None) -> tuple[int, list[dict]]:
+                     country_id: int, operator_id: int | None,
+                     hotels: str | None = None) -> tuple[int, list[dict]]:
         hotels_only = params.search_mode == "hotels"
         query: dict[str, Any] = {
             "datefrom": _fmt(params.date_from), "dateto": _fmt(params.date_to),
@@ -509,6 +510,10 @@ class TourvisorApiProvider:
             query["childage1"] = params.children_ages[0]
         if operator_id is not None:
             query["operators"] = operator_id
+        if hotels:
+            # Прижать поиск к конкретным отелям витрины (id через запятую). Фильтр
+            # серверный и точный: контрольная проба вернула ровно запрошенные id.
+            query["hotels"] = hotels
         body = await self._get(client, SEARCH_URL, referrer=self._referrer(params), **query)
         result = body.get("result") or {}
         request_id = _to_int(result.get("requestid"))
@@ -655,6 +660,56 @@ def _items(lists: dict, group: str, key: str) -> list[dict]:
     if isinstance(node, dict):
         node = node.get(key)
     return [i for i in (node or []) if isinstance(i, dict)]
+
+
+# Сколько id отелей уходит в одну прижатую пробу. Сорок держит запрос коротким, а
+# страницы выдачи (полтора десятка отелей) дочитываются обычным постраничным циклом.
+PROBE_CHUNK = int(os.environ.get("PEGASGAP_TOURVISOR_PROBE_CHUNK") or 40)
+
+
+async def probe_hotels_with_tours(params: SearchParams,
+                                  hotel_ids: list[int]) -> set[int] | None:
+    """У каких из отелей витрины прижатый поиск находит туры на эти параметры.
+
+    Нужна, потому что ЛИСТИНГ витрины годен для утверждения «отель есть», но не «отеля
+    нет»: под нагрузкой его пагинация заикается, «прирост иссяк» случается раньше конца,
+    и до этой пробы 19 из 52 обратных находок одного живого прогона оказались фантомами
+    — прижатый поиск нашёл туры у отелей, которых листинг не показал.
+
+    None — проба не состоялась (сеть, лимиты): вызывающий не делает НИКАКИХ выводов.
+    Возврат пустого множества, наоборот, утверждение: туров нет ни у кого из списка.
+    """
+    if not hotel_ids:
+        return set()
+    provider = TourvisorApiProvider()
+    proxy = pool().acquire()
+    found: set[int] = set()
+    try:
+        async with httpx.AsyncClient(
+                timeout=90, proxy=proxy.url if proxy else None,
+                headers={"Referer": REFERER, "User-Agent": DESKTOP_UA}) as client:
+            lists = await provider._reference(client)
+            city_id = _find_id(_items(lists, "departures", "departure"),
+                               params.departure_city)
+            country_id = _find_id(_items(lists, "allcountry", "country"),
+                                  params.destination_country)
+            operator = params.operators[0] if params.operators else ""
+            operator_id = provider._operator_id(lists, operator)
+            if city_id is None or country_id is None:
+                return None
+            for i in range(0, len(hotel_ids), PROBE_CHUNK):
+                chunk = hotel_ids[i:i + PROBE_CHUNK]
+                request_id, _ = await provider._start(
+                    client, params, city_id, country_id, operator_id,
+                    hotels=",".join(str(h) for h in chunk))
+                blocks, _, _ = await provider._collect_pages(
+                    client, request_id, provider._referrer(params))
+                found |= _hotel_codes(blocks) & set(chunk)
+    except Exception as exc:
+        log.warning("прижатая проба не состоялась (%s) — обратные находки без "
+                    "верификации", type(exc).__name__)
+        return None
+    return found
 
 
 async def fetch_country_hotels(country: str) -> dict[int, dict]:
