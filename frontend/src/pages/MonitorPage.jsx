@@ -450,7 +450,7 @@ function Checkins({ f }) {
   );
 }
 
-const nightsLabel = (f) =
+const nightsLabel = (f) =>
   f.params?.nights_min === f.params?.nights_max
     ? `${f.params?.nights_min} ноч.`
     : `${f.params?.nights_min}–${f.params?.nights_max} ноч.`;
