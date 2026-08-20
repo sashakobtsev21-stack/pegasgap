@@ -164,7 +164,7 @@ export default function MonitorPage() {
                 {(stored?.failed || []).map((f) => (
                   <div key={f.run_id} className="border-b border-white/5 py-1 text-[11px]">
                     <span className="text-ink">
-                      {f.operator}: {f.departure_city} → {f.country}
+                      {f.operator}: {routeLabel(f)}
                     </span>{" "}
                     <span className="text-muted">
                       {f.search_mode === "hotels" ? "отели" : "туры"} ·{" "}
@@ -193,7 +193,7 @@ export default function MonitorPage() {
                 «показано 500 из 36788» при том, что таблица показывала полторы сотни
                 свёрнутых групп, а карточка — десять тысяч проблем. Три числа, три
                 разные единицы, и ни одно не сходилось с соседним. */}
-            Чего нет на Слетать
+            Расхождения площадок
             {stored ? (groups.length < (summary.unique ?? 0)
               ? ` · показано ${groups.length} из ${summary.unique}`
               : ` · ${groups.length}`) : ""}
@@ -279,7 +279,7 @@ export default function MonitorPage() {
                       </td>
                       <td className="py-2 pr-3">
                         <div className="font-medium text-ink">
-                          {g.head.departure_city} → {g.head.country}
+                          {routeLabel(g.head)}
                         </div>
                         {/* Совпадающее описываем один раз, различия — отдельной строкой:
                             иначе четыре почти одинаковых ряда приходится сличать глазами,
@@ -449,6 +449,16 @@ function Checkins({ f }) {
     </div>
   );
 }
+
+/**
+ * Направление находки. В режиме «отели» города вылета НЕТ: витрина ищет проживание без
+ * перелёта, и город в запросе не участвует. Показывать «Москва → Турция» там, где вылета
+ * не было, — значит звать разбираться не туда.
+ */
+const routeLabel = (f) =>
+  (f.search_mode === "hotels" || f.params?.search_mode === "hotels")
+    ? `${f.country} · без перелёта`
+    : `${f.departure_city} → ${f.country}`;
 
 const nightsLabel = (f) =>
   f.params?.nights_min === f.params?.nights_max

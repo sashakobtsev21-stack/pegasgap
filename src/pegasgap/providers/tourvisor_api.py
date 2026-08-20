@@ -178,6 +178,26 @@ def _blocks_are_ours(blocks: list[dict], operator_id: int) -> bool:
     return not seen or seen == {operator_id}
 
 
+# Самая маленькая ПОЛНАЯ страница, какую отдаёт витрина. Замерено: в режиме туров первая
+# страница держит полтора десятка отелей, в режиме «отели» — ровно 50. Значение нужно
+# только для одного вывода: выдача короче одной страницы заведомо полна, всё остальное
+# без сработавшей пагинации — недоказуемо.
+_MIN_FULL_PAGE = 15
+
+
+def _page_is_whole(advanced: bool, seen: set[int]) -> bool:
+    """Можно ли считать собранное полной выдачей.
+
+    Сдвинулась пагинация хоть раз — исчерпание прироста означает конец: страницы
+    кончились. Не сдвинулась ни разу — мы видели ОДНУ страницу, и полной её можно считать
+    только когда она даже не заполнилась. Ровно 50 отелей в режиме «отели» или полтора
+    десятка в турах — это предел страницы, а не конец выдачи, и разница здесь решающая:
+    на «полной» выдаче показывается обратная сторона, и капнутый эталон превращал сотни
+    наших отелей в «нет на Турвизоре».
+    """
+    return advanced or len(seen) < _MIN_FULL_PAGE
+
+
 def _hotel_codes(blocks: list[dict]) -> set[int]:
     """Идентификаторы отелей во всех блоках — по ним меряется прирост страницы."""
     return {
@@ -486,8 +506,13 @@ class TourvisorApiProvider:
         """
         hotels_only = params.search_mode == "hotels"
         country = _LANDING_COUNTRIES.get(params.destination_country.strip())
-        city = _LANDING_CITIES.get(params.departure_city.strip())
-        path = f"{country}/{city}" if country and city else _LANDING_FALLBACK
+        # В режиме «отели» города вылета нет вовсе — витрина ищет проживание без перелёта
+        # (`s_flyfrom=99`). Город в пути от этого не меняет поиск, но читается как его
+        # часть: адрес вида `/tours/turkey/moskva` заставляет думать, что искали
+        # «Москва → Турция», хотя вылета в запросе не было. Ставим только страну.
+        city = None if hotels_only else _LANDING_CITIES.get(params.departure_city.strip())
+        path = (f"{country}/{city}" if country and city
+                else (country or _LANDING_FALLBACK))
 
         fields = {
             "ts_dosearch": 1,
@@ -542,19 +567,31 @@ class TourvisorApiProvider:
         if not seen:
             return blocks, True, True
 
+        # Пагинация в режиме «отели» не работает вовсе: витрина отдаёт ровно 50 самых
+        # дешёвых отелей, а `nextpage` возвращает ту же страницу. Прежний цикл видел
+        # «прирост иссяк» и объявлял выдачу собранной целиком — после чего обратная
+        # сторона сравнивала наши 209 отелей с их полусотней и выдавала полторы сотни
+        # «нет на Турвизоре» на каждый прогон. Отель Britannia при этом был на ОБЕИХ
+        # площадках и по одной цене.
+        #
+        # Поэтому исчерпание прироста доказывает конец выдачи только тогда, когда
+        # пагинация хоть раз сработала. Если она не сдвинулась ни разу, мы видели ровно
+        # одну страницу — и полной её можно считать лишь пока она не упёрлась в предел.
+        advanced = False
         for _ in range(MAX_PAGES - 1):
             body = await self._get(client, SEARCH_URL, referrer=referrer,
                                    nextpage=1, requestid=request_id)
             next_id = _to_int((body.get("result") or {}).get("requestid"))
             if not next_id:
-                return blocks, True, True      # витрина сказала, что дальше ничего нет
+                return blocks, True, _page_is_whole(advanced, seen)
             request_id = next_id
             page_blocks, finished = await self._await_result(client, request_id, referrer)
             if not finished:
                 return blocks, True, False     # оборвались на середине — выдача неполная
             codes = _hotel_codes(page_blocks)
             if not codes - seen:
-                return blocks, True, True      # прирост иссяк — выдача собрана целиком
+                return blocks, True, _page_is_whole(advanced, seen)
+            advanced = True
             seen |= codes
             blocks = page_blocks
         log.info("Tourvisor (json): предел в %d страниц исчерпан, отелей набрано %d",

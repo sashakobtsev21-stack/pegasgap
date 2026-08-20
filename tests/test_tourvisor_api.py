@@ -91,3 +91,25 @@ def test_empty_result_is_complete_not_truncated():
     blocks, finished, complete = _collect(([],))
     assert finished and complete
     assert blocks == [{"operator": 12, "hotel": []}]
+
+
+# --- Полнота выдачи -----------------------------------------------------------------
+
+def test_one_page_that_never_grew_is_not_proof_of_completeness():
+    """В режиме «отели» витрина отдаёт ровно 50 самых дешёвых, а `nextpage` возвращает ту
+    же страницу. Прежний цикл видел «прирост иссяк» и объявлял выдачу собранной целиком —
+    после чего обратная сторона сравнивала наши 209 отелей с их полусотней и выдавала
+    полторы сотни «нет на Турвизоре» на прогон. Отель Britannia при этом был на ОБЕИХ
+    площадках и по одной цене."""
+    assert not tourvisor_api._page_is_whole(advanced=False, seen=set(range(50)))
+    assert not tourvisor_api._page_is_whole(advanced=False, seen=set(range(16)))
+
+
+def test_a_page_that_did_not_even_fill_is_complete():
+    """Иначе любое маленькое направление навсегда осталось бы без обратной стороны."""
+    assert tourvisor_api._page_is_whole(advanced=False, seen=set(range(7)))
+
+
+def test_pagination_that_worked_proves_the_end():
+    """Сдвинулась хоть раз — исчерпание прироста означает конец: страницы кончились."""
+    assert tourvisor_api._page_is_whole(advanced=True, seen=set(range(594)))
