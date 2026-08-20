@@ -299,18 +299,18 @@ def test_truncated_reference_only_costs_completeness():
     assert any("не целиком" in n for n in scan.notes)
 
 
-def test_truncated_tourvisor_silences_the_reverse_side_but_keeps_the_run(monkeypatch):
-    """«Есть у нас, нет у них» на недочитанной выдаче выдумано поголовно — эту сторону
-    надо молчать. Но прямая сторона от обрезки не страдает, и брать прогон целиком в брак
-    значит выбрасывать годный результат вместе с негодным."""
+def test_truncated_listing_yields_probe_anchored_candidates(monkeypatch):
+    """Недочитанный листинг больше не выключает сторону: кандидаты рождаются с пометкой,
+    что держать их будут прижатые пробы (reversecheck), а прогон остаётся достоверным —
+    прямая сторона от обрезки не страдает."""
     monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", True)
     ref = result("tourvisor", [hotel("A Palace", "100000", "tourvisor")], truncated=True)
     chk = result("sletat", [hotel("A Palace", "100000", "sletat"),
                             hotel("C Beach", "95000", "sletat")])
     scan = detect(PARAMS, ref, chk)
-    assert scan.gaps_of(GapKind.REVERSE) == []
+    assert [g.hotel_name for g in scan.gaps_of(GapKind.REVERSE)] == ["C Beach"]
     assert scan.trustworthy
-    assert any("прочитана не до конца" in n for n in scan.notes)
+    assert any("удержаны только прижатыми пробами" in n for n in scan.notes)
 
 
 def test_comparable_coverage_still_reports_reverse(monkeypatch):

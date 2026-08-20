@@ -12,12 +12,13 @@
 
 * туры нашлись — находка снимается: листинг был неполон, отель на витрине есть;
 * туров нет — находка остаётся, и теперь это не «не увидели в листинге», а
-  подтверждённое отсутствие;
-* проба не состоялась — находки остаются с заметкой «не верифицированы»: сбой сети не
-  повод ни снимать, ни утверждать.
+  подтверждённое отсутствие.
 
-Кандидаты без id (в словаре витрины отель не опознан) пробе недоступны — их честность
-держит диагноз «нет в словаре» / «возможно, другое имя».
+Дальше поведение зависит от полноты листинга. На ПОЛНОМ несостоявшаяся проба и
+кандидаты без id остаются с честными пометками: у стороны есть второе основание —
+дочитанный листинг. На НЕДОЧИТАННОМ (режим «отели» с потолком витрины в 50, заикание
+пагинации) второго основания нет, проба — единственное: всё неподтверждённое снимается.
+Так обратная сторона работает и там, где раньше молчала целиком.
 """
 
 from __future__ import annotations
@@ -36,35 +37,59 @@ Probe = Callable[[SearchParams, list[int]], Awaitable[set[int] | None]]
 async def verify_reverse(scan: ScanResult, probe: Probe = probe_hotels_with_tours) -> None:
     """Снять обратные находки, у которых прижатый поиск нашёл туры. Меняет прогон.
 
+    На ПОЛНОМ листинге проба — усиление: не состоялась, находки остаются с честной
+    пометкой. На НЕДОЧИТАННОМ листинге (режим «отели» с потолком в 50, заикание
+    пагинации) проба — единственное основание стороны: кандидат без id витрины или без
+    состоявшейся пробы снимается, потому что «не в листинге» там недоказуемо.
+
     `probe` подменяется в тестах: судьбу находки решает эта логика, и она обязана
     проверяться офлайн.
     """
-    targets = [g for g in scan.gaps
-               if g.kind is GapKind.REVERSE and g.reference_hotel_id]
-    if not targets:
+    reverse = [g for g in scan.gaps if g.kind is GapKind.REVERSE]
+    if not reverse:
         return
+    truncated = scan.reference is not None and scan.reference.truncated
 
-    ids = sorted({g.reference_hotel_id for g in targets})
-    found = await probe(scan.params, ids)
-    if found is None:
+    doomed: set[int] = set()          # id() снимаемых находок
+    unprovable = [g for g in reverse if not g.reference_hotel_id]
+    if truncated and unprovable:
+        doomed |= {id(g) for g in unprovable}
         scan.notes.append(
-            f"обратные находки ({len(targets)}) не верифицированы прижатой пробой — "
-            f"проба не состоялась; «нет в листинге» может означать недочитанный листинг")
-        return
+            f"снято кандидатов «нет на Турвизоре»: {len(unprovable)} — листинг неполон, "
+            f"а в словаре витрины отель не опознан: проверить нечем")
 
-    if not found:
-        scan.notes.append(
-            f"обратные находки верифицированы прижатой пробой: у всех {len(ids)} "
-            f"отелей туров действительно нет")
-        return
+    targets = [g for g in reverse if g.reference_hotel_id]
+    if targets:
+        ids = sorted({g.reference_hotel_id for g in targets})
+        found = await probe(scan.params, ids)
+        if found is None:
+            if truncated:
+                doomed |= {id(g) for g in targets}
+                scan.notes.append(
+                    f"снято кандидатов «нет на Турвизоре»: {len(targets)} — листинг "
+                    f"неполон и прижатая проба не состоялась, утверждать нечего")
+            else:
+                scan.notes.append(
+                    f"обратные находки ({len(targets)}) не верифицированы прижатой "
+                    f"пробой — проба не состоялась; «нет в листинге» может означать "
+                    f"недочитанный листинг")
+        else:
+            dropped = [g for g in targets if g.reference_hotel_id in found]
+            confirmed = len(targets) - len(dropped)
+            doomed |= {id(g) for g in dropped}
+            if dropped:
+                sample = dropped[0]
+                log.info("верификация обратных: снято %d из %d, пример %s",
+                         len(dropped), len(targets), sample.hotel_name)
+                scan.notes.append(
+                    f"снято обратных находок: {len(dropped)} из {len(targets)} — "
+                    f"прижатый поиск НАШЁЛ туры, листинг витрины был неполон "
+                    f"(например {sample.hotel_name}); остальные {confirmed} "
+                    f"подтверждены пробой")
+            else:
+                scan.notes.append(
+                    f"обратные находки верифицированы прижатой пробой: у всех "
+                    f"{len(ids)} отелей туров действительно нет")
 
-    dropped = [g for g in targets if g.reference_hotel_id in found]
-    scan.gaps = [g for g in scan.gaps
-                 if not (g.kind is GapKind.REVERSE and g.reference_hotel_id in found)]
-    sample = dropped[0]
-    log.info("верификация обратных: снято %d из %d (листинг был неполон), пример %s",
-             len(dropped), len(targets), sample.hotel_name)
-    scan.notes.append(
-        f"снято обратных находок: {len(dropped)} из {len(targets)} — прижатый поиск "
-        f"НАШЁЛ туры, листинг витрины был неполон (например {sample.hotel_name}); "
-        f"остальные {len(targets) - len(dropped)} подтверждены пробой")
+    if doomed:
+        scan.gaps = [g for g in scan.gaps if id(g) not in doomed]

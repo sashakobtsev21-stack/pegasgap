@@ -3,7 +3,13 @@
 from datetime import date
 from decimal import Decimal
 
-from pegasgap.models import GapKind, HotelGap, ScanResult, SearchParams
+from pegasgap.models import (
+    GapKind,
+    HotelGap,
+    ProviderResult,
+    ScanResult,
+    SearchParams,
+)
 from pegasgap.reversecheck import verify_reverse
 
 PARAMS = SearchParams(departure_city="Москва", destination_country="Турция",
@@ -16,8 +22,11 @@ def reverse(name: str, ref_id: int | None) -> HotelGap:
                     checked_price=Decimal("100000"))
 
 
-def scan_of(gaps) -> ScanResult:
-    return ScanResult(params=PARAMS, operator="Pegas Touristik", gaps=list(gaps))
+def scan_of(gaps, truncated: bool = False) -> ScanResult:
+    reference = ProviderResult(provider="tourvisor", success=True, duration_seconds=1.0,
+                               truncated=truncated)
+    return ScanResult(params=PARAMS, operator="Pegas Touristik", gaps=list(gaps),
+                      reference=reference)
 
 
 def probe_returning(found):
@@ -61,3 +70,26 @@ async def test_candidates_without_showcase_id_are_left_alone():
     scan = scan_of([reverse("Гранд Пляж Юг", None)])
     await verify_reverse(scan, probe)
     assert len(scan.gaps) == 1 and not calls
+
+
+async def test_truncated_listing_keeps_only_probe_confirmed():
+    """Решение (в): в режиме «отели» листинг всегда упирается в потолок 50, и сторона
+    держится только пробами — подтверждённые остаются, найденные снимаются."""
+    scan = scan_of([reverse("Confirmed", 1), reverse("Phantom", 2)], truncated=True)
+    await verify_reverse(scan, probe_returning({2}))
+    assert [g.hotel_name for g in scan.gaps] == ["Confirmed"]
+
+
+async def test_truncated_listing_drops_unprovable_candidates():
+    """Кандидат без id витрины на неполном листинге недоказуем — проверить нечем."""
+    scan = scan_of([reverse("NoId", None), reverse("Confirmed", 1)], truncated=True)
+    await verify_reverse(scan, probe_returning(set()))
+    assert [g.hotel_name for g in scan.gaps] == ["Confirmed"]
+    assert any("проверить нечем" in n for n in scan.notes)
+
+
+async def test_truncated_listing_with_failed_probe_claims_nothing():
+    scan = scan_of([reverse("Anything", 1)], truncated=True)
+    await verify_reverse(scan, probe_returning(None))
+    assert scan.gaps == []
+    assert any("утверждать нечего" in n for n in scan.notes)
