@@ -201,19 +201,39 @@ def reverse_index(their_hotels: dict[int, dict]) -> CatalogIndex:
     return CatalogIndex(hotels)
 
 
+# Слова-места из названий отелей. Для опознания отеля общее место ничего не значит:
+# «BODRUM BEACH RESORT» совпадает по «bodrum» с каждым отелем Бодрума, и на живом списке
+# один такой кандидат предлагался двум разным отелям сразу.
+_PLACE_TOKENS = frozenset({
+    "istanbul", "стамбул", "antalya", "анталья", "alanya", "алания", "bodrum", "бодрум",
+    "side", "сиде", "kemer", "кемер", "belek", "белек", "marmaris", "мармарис",
+    "fethiye", "фетхие", "kusadasi", "кушадасы", "bursa", "бурса", "izmir", "измир",
+    "cappadocia", "каппадокия", "sirkeci", "laleli", "sultanahmet", "fatih", "taksim",
+    "harbiye",
+})
+
+
 def _plausible_candidate(gap: HotelGap, hotel: CatalogHotel) -> bool:
     """Стоит ли шаткое совпадение показывать человеку как кандидата.
 
     Матчер отдаёт WEAK и за осмысленное сходство, и за случайное вхождение трёх букв:
-    живой список предлагал «ABEL» для «Annabella Park» и один «ALA HOTEL» сразу четырём
-    отелям — такие кандидаты не помогают сверке, а хоронят доверие к колонке. Порог:
-    либо совпала хотя бы половина значимых слов, либо написания в общем алфавите близки.
+    живой список предлагал «ABEL» для «Annabella Park», «BIR» для «Birbey» и один
+    «ALA HOTEL» сразу четырём отелям — такие кандидаты не помогают сверке, а хоронят
+    доверие к колонке.
+
+    Кандидат осмыслен, если совпала хотя бы половина значимых слов (и среди общих есть
+    не-топоним), либо написания близки в общем алфавите. Нечёткое сравнение коротких ядер
+    врёт («birbei» ~ «bir» даёт 0.67, «evsen» ~ «seven» — 0.8), поэтому ему дополнительно
+    нужны длина от пяти и общая первая буква.
     """
     ours, theirs = tokens(gap.hotel_name), tokens(hotel.name)
-    if ours and theirs and len(ours & theirs) / len(ours | theirs) >= 0.5:
+    shared = (ours & theirs) - _PLACE_TOKENS
+    if shared and len(ours & theirs) / len(ours | theirs) >= 0.5:
         return True
     a, b = ascii_core(gap.hotel_name), ascii_core(hotel.name)
-    return bool(a and b) and SequenceMatcher(None, a, b).ratio() >= 0.6
+    if min(len(a), len(b)) < 5 or not (a and b and a[0] == b[0]):
+        return False
+    return SequenceMatcher(None, a, b).ratio() >= 0.6
 
 
 def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
@@ -239,7 +259,7 @@ def diagnose_reverse(scan: ScanResult, index: CatalogIndex) -> None:
             gap.reference_hotel_id = hotel.id
             gap.note = (f"у витрины заведён как «{hotel.name}» (id {hotel.id}), "
                         f"но туров на эти даты её поиск не вернул")
-        elif hotel is not None and "звёзды" in reason:
+        elif hotel is not None and reason.startswith("названия совпали"):
             # Имя совпало буквально, разошлась только звёздность — данные о звёздах у
             # площадок расходятся сплошь и рядом, и это почти наверняка тот же отель.
             gap.diagnosis = HotelDiagnosis.REF_MAYBE_NAMED

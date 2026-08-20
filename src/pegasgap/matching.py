@@ -328,9 +328,11 @@ def compare(a: HotelOffer, b: HotelOffer) -> tuple[Confidence, str]:
             return Confidence.WEAK, f"частичное совпадение слов ({sim:.0%})"
         return Confidence.NONE, ""
 
-    if _stars_conflict(a, b):
+    if best.comparable and _stars_conflict(a, b):
         # Название сошлось, а звёзды разные — либо ошибка данных, либо разные объекты
-        # сети. Пропуском такое объявлять нельзя, только в проверку.
+        # сети. Пропуском такое объявлять нельзя, только в проверку. «Совпали» пишем
+        # ТОЛЬКО про уверенное совпадение: слабое вхождение («ari» в «arinbodrum») со
+        # звёздным конфликтом получало ту же фразу и читалось как совпадение имён.
         return Confidence.WEAK, f"названия совпали, звёзды разошлись ({a.stars} и {b.stars})"
 
     reason = {

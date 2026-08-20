@@ -365,3 +365,27 @@ def test_same_name_different_stars_says_exactly_that():
     assert g.diagnosis is HotelDiagnosis.REF_MAYBE_NAMED
     assert "звёзды" in g.note and "тот же отель" in g.note
     assert g.reference_hotel_id == 9
+
+
+def test_short_fuzzy_and_place_only_overlap_are_rejected():
+    """Живой список: «BIR» для «Birbey», «CLUB SEVEN» для «Evsen», «BODRUM BEACH
+    RESORT» двум отелям Бодрума сразу — совпадение по огрызку или по топониму не
+    кандидат."""
+    junk = {1: {"name": "BIR", "stars": 3},
+            2: {"name": "CLUB SEVEN", "stars": 3},
+            3: {"name": "BODRUM BEACH RESORT", "stars": 4}}
+    for name in ("Birbey", "Evsen", "Senses Hotel Bodrum"):
+        scan = reverse_scan(name)
+        diagnose_reverse(scan, reverse_index(junk))
+        assert scan.gaps[0].diagnosis is HotelDiagnosis.REF_NOT_IN_DICTIONARY, name
+
+
+def test_weak_pair_with_star_clash_is_not_the_same_name():
+    """У матчера два текста со словом «звёзды»: «названия совпали…» и «похоже на то же
+    название…». Второй — не совпадение имён, и в ветку «это же имя» попадать не должен."""
+    their = {5: {"name": "ARI HOTEL", "stars": 3}}
+    g = HotelGap(kind=GapKind.REVERSE, hotel_name="Arin Resort Bodrum", stars=5,
+                 checked_price=Decimal("100000"))
+    scan = scan_with([g])
+    diagnose_reverse(scan, reverse_index(their))
+    assert g.diagnosis is HotelDiagnosis.REF_NOT_IN_DICTIONARY
