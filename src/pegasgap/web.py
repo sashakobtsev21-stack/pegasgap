@@ -501,8 +501,10 @@ def create_app(db_path: str | Path = storage.DEFAULT_DB,
         with storage.session(db_path) as conn:
             seeded, retired = case_queue.seed_from_matrix(conn, matrix)
             queue_stats = case_queue.stats(conn)
-        bus.log(f"Очередь сверена с конфигом: {seeded} актуальных"
-                + (f", {retired} отключено" if retired else ""))
+        # Число «погашенных» кейсов наружу не показываем: оно почти всегда равно размеру
+        # прежней очереди (окна дат считаются от дня сборки, и назавтра ключи другие),
+        # читается как «половина очереди сломалась» и объясняет только внутреннюю кухню.
+        bus.log(f"Очередь собрана: {seeded} кейсов (погашено прежних: {retired})")
         return {"seeded": seeded, "retired": retired, "stats": queue_stats}
 
     @app.get("/api/findings")

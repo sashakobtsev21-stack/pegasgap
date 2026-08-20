@@ -228,8 +228,7 @@ function FullScan() {
     try {
       if (what === "seed") {
         const r = await postJson("/api/queue/seed", {}, { timeoutMs: 60_000 });
-        setNote(`Очередь сверена с конфигом: ${r.seeded} актуальных`
-                + (r.retired ? `, ${r.retired} отключено` : ""));
+        setNote(`Очередь собрана: ${r.seeded} кейсов`);
       } else {
         await postJson(`/api/worker/${what}`, {}, { timeoutMs: 120_000 });
         if (what === "start") navigate("/monitor");
