@@ -37,6 +37,11 @@ log = logging.getLogger("pegasgap.worker")
 # Пауза между кейсами. Не оптимизация, а вежливость к площадкам: очередь бесконечна,
 # и выигрыш от спешки нулевой, а риск упереться в квоту — реальный.
 PAUSE_BETWEEN_S = 3.0
+# Сколько кейсов идёт одновременно. Последовательный обход давал круг почти в неделю;
+# цель владельца — до суток, и параллельность здесь главный множитель: кейс почти
+# целиком состоит из ожидания двух площадок. Потолок диктуют их лимиты по IP — пул из
+# 55 прокси выдерживает несколько параллельных кейсов с пробами.
+CONCURRENCY = int(os.environ.get("PEGASGAP_WORKER_CONCURRENCY") or 6)
 # Пауза после отказа по квоте. Заметно длиннее обычной: смысл в том, чтобы дать лимиту
 # восстановиться, а не постучаться ещё раз через секунду.
 RATE_LIMIT_PAUSE_S = 120.0
@@ -133,7 +138,8 @@ class Worker:
     def __init__(self, db_path: Path, operator: str = PEGAS, scan_runner=None,
                  pause_s: float = PAUSE_BETWEEN_S, idle_s: float = IDLE_PAUSE_S,
                  rate_limit_pause_s: float = RATE_LIMIT_PAUSE_S,
-                 min_recheck_hours: float = MIN_RECHECK_HOURS) -> None:
+                 min_recheck_hours: float = MIN_RECHECK_HOURS,
+                 concurrency: int = CONCURRENCY) -> None:
         self.db_path = Path(db_path)
         self.operator = operator
         self.state = WorkerState()
@@ -146,6 +152,7 @@ class Worker:
         self.idle_s = idle_s
         self.rate_limit_pause_s = rate_limit_pause_s
         self.min_recheck_hours = min_recheck_hours
+        self.concurrency = max(1, concurrency)
 
     async def _scan(self, case: Case):
         if self._run_scan is not None:
@@ -191,12 +198,32 @@ class Worker:
             pass
 
     async def _loop(self) -> None:
+        """Параллельный обход: до `concurrency` кейсов одновременно.
+
+        Кейс — почти сплошное ожидание сети (две площадки, пробы, опросы готовности),
+        поэтому параллельность умножает пропускную способность почти линейно. Взятый в
+        работу кейс исключается из выдачи очереди до завершения; отметка «проверен»
+        ставится по факту, как и раньше.
+        """
         failures_in_row = 0
+        inflight: dict[asyncio.Task, Case] = {}
         try:
-            while not self._stop.is_set():
-                with storage.session(self.db_path) as conn:
-                    case = next_case(conn, min_age_hours=self.min_recheck_hours)
-                if case is None:
+            while True:
+                while (not self._stop.is_set()
+                       and len(inflight) < self.concurrency):
+                    with storage.session(self.db_path) as conn:
+                        case = next_case(conn, min_age_hours=self.min_recheck_hours,
+                                         exclude_ids=[c.id for c in inflight.values()])
+                    if case is None:
+                        break
+                    bus.log(f"Проверяю: {case.title}")
+                    task = asyncio.create_task(self._scan(case))
+                    inflight[task] = case
+                    self._show_inflight(inflight)
+
+                if not inflight:
+                    if self._stop.is_set():
+                        break
                     self.state.current = None
                     bus.log(f"Очередь пуста или всё проверено недавно — жду "
                             f"{self.idle_s:.0f} с", level="dim")
@@ -204,36 +231,15 @@ class Worker:
                     await self._sleep(self.idle_s)
                     continue
 
-                self.state.current = case.title
-                bus.log(f"Проверяю: {case.title}")
-                bus.publish("state", **self.state.as_dict())
-
+                done, _ = await asyncio.wait(set(inflight),
+                                             return_when=asyncio.FIRST_COMPLETED)
                 pause = self.pause_s
-                try:
-                    run_id, scan = await self._scan(case)
-                except Exception as exc:
-                    self.state.errors += 1
-                    failures_in_row += 1
-                    self.state.last_error = f"{type(exc).__name__}: {exc}"
-                    log.exception("кейс %s упал", case.title)
-                    bus.log(f"Сбой на «{case.title}»: {self.state.last_error}",
-                            level="error")
-                    with storage.session(self.db_path) as conn:
-                        # Помечаем даже упавший: иначе воркер вечно берёт его же.
-                        mark_checked(conn, case.id, None, 0)
-                else:
-                    self.state.checked += 1
-                    self.state.gaps += len(scan.gaps)
-                    with storage.session(self.db_path) as conn:
-                        mark_checked(conn, case.id, run_id, len(scan.gaps))
-                    _finding_events(case, scan, run_id)
-                    self._report(case, scan)
-                    failures_in_row = failures_in_row + 1 if _not_executed(scan) else 0
-                    if _is_rate_limited(scan):
+                for task in done:
+                    case = inflight.pop(task)
+                    failures_in_row, limited = self._absorb(case, task, failures_in_row)
+                    if limited:
                         pause = self.rate_limit_pause_s
-                        self.state.paused_until = datetime.now()
-                        bus.log(f"Площадка ограничила частоту запросов — пауза "
-                                f"{self.rate_limit_pause_s:.0f} с", level="warn")
+                self._show_inflight(inflight)
 
                 if failures_in_row >= MAX_CONSECUTIVE_FAILURES:
                     self.state.stopped_reason = (
@@ -244,12 +250,60 @@ class Worker:
                     break
 
                 bus.publish("state", **self.state.as_dict())
-                await self._sleep(pause)
+                if not self._stop.is_set():
+                    await self._sleep(pause)
         finally:
+            # Взятые кейсы доводим до конца: оборванный посреди прогон оставил бы кейс
+            # непомеченным, а запись у нас «всё или ничего».
+            if inflight:
+                bus.log(f"Довожу начатые кейсы: {len(inflight)}", level="dim")
+                done, _ = await asyncio.wait(set(inflight))
+                for task in done:
+                    self._absorb(inflight.pop(task), task, 0)
             self.state.running = False
             self.state.current = None
             bus.log("Воркер остановлен")
             bus.publish("state", **self.state.as_dict())
+
+    def _show_inflight(self, inflight: dict) -> None:
+        titles = [c.title for c in inflight.values()]
+        if not titles:
+            self.state.current = None
+        elif len(titles) == 1:
+            self.state.current = titles[0]
+        else:
+            self.state.current = f"{titles[0]} · и ещё {len(titles) - 1} параллельно"
+        bus.publish("state", **self.state.as_dict())
+
+    def _absorb(self, case: Case, task: asyncio.Task,
+                failures_in_row: int) -> tuple[int, bool]:
+        """Принять завершённый кейс: отметки, счётчики, серия сбоев, лимит частоты."""
+        limited = False
+        try:
+            run_id, scan = task.result()
+        except Exception as exc:
+            self.state.errors += 1
+            failures_in_row += 1
+            self.state.last_error = f"{type(exc).__name__}: {exc}"
+            log.exception("кейс %s упал", case.title)
+            bus.log(f"Сбой на «{case.title}»: {self.state.last_error}", level="error")
+            with storage.session(self.db_path) as conn:
+                # Помечаем даже упавший: иначе воркер вечно берёт его же.
+                mark_checked(conn, case.id, None, 0)
+        else:
+            self.state.checked += 1
+            self.state.gaps += len(scan.gaps)
+            with storage.session(self.db_path) as conn:
+                mark_checked(conn, case.id, run_id, len(scan.gaps))
+            _finding_events(case, scan, run_id)
+            self._report(case, scan)
+            failures_in_row = failures_in_row + 1 if _not_executed(scan) else 0
+            if _is_rate_limited(scan):
+                limited = True
+                self.state.paused_until = datetime.now()
+                bus.log(f"Площадка ограничила частоту запросов — пауза "
+                        f"{self.rate_limit_pause_s:.0f} с", level="warn")
+        return failures_in_row, limited
 
     def _report(self, case: Case, scan: ScanResult) -> None:
         """Одна строка итога в лог — чтобы по логу читалась картина без отчёта."""

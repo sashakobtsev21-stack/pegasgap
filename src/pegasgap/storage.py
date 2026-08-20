@@ -145,10 +145,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 
 def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
-    """Открыть (при необходимости создав) базу."""
-    conn = sqlite3.connect(str(path))
+    """Открыть (при необходимости создав) базу.
+
+    WAL и щедрый busy_timeout — под параллельный воркер: несколько кейсов пишут прогоны
+    одновременно, и с журналом по умолчанию вторая запись падала бы по «database is
+    locked» вместо короткого ожидания.
+    """
+    conn = sqlite3.connect(str(path), timeout=60)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.executescript(_SCHEMA)
     conn.executescript(QUEUE_SCHEMA)
     _migrate(conn)

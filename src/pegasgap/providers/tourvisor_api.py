@@ -655,8 +655,13 @@ class TourvisorApiProvider:
         """Опрашивать результат до `status.finished`. Второй элемент — успели ли."""
         deadline = time.monotonic() + POLL_TIMEOUT_S
         blocks: list[dict] = []
+        first = True
         while time.monotonic() < deadline:
-            await asyncio.sleep(POLL_INTERVAL_S)
+            # Первая проверка — сразу: страницы после начальной почти всегда уже готовы
+            # (ответ кумулятивен), и обязательный сон перед КАЖДОЙ платил по две секунды
+            # на страницу — на шестидесяти страницах Турции набегало две минуты сна.
+            await asyncio.sleep(0.15 if first else POLL_INTERVAL_S)
+            first = False
             data = (await self._get(client, RESULT_URL, referrer=referrer,
                                     requestid=request_id)).get("data") or {}
             blocks = list(data.get("block") or [])
@@ -689,7 +694,7 @@ def _items(lists: dict, group: str, key: str) -> list[dict]:
 
 # Сколько id отелей уходит в одну прижатую пробу. Сорок держит запрос коротким, а
 # страницы выдачи (полтора десятка отелей) дочитываются обычным постраничным циклом.
-PROBE_CHUNK = int(os.environ.get("PEGASGAP_TOURVISOR_PROBE_CHUNK") or 40)
+PROBE_CHUNK = int(os.environ.get("PEGASGAP_TOURVISOR_PROBE_CHUNK") or 80)
 
 
 async def probe_hotels_with_tours(params: SearchParams,

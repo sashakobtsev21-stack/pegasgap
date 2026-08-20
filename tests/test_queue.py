@@ -5,6 +5,7 @@
 проверено, что нет, и что посев конфига эту память не затирает.
 """
 
+import asyncio
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -50,6 +51,7 @@ def test_case_key_ignores_child_order():
 
 def test_case_title_reads_like_the_report_line():
     conn_case = q.Case(
+        case_key="t|k",
         id=1, operator="Coral Travel",
         departure_city="Москва", country="Египет", search_mode="tours",
         date_from=date(2026, 10, 20), date_to=date(2026, 10, 25), nights=5,
@@ -284,7 +286,10 @@ async def test_worker_stops_when_the_platform_is_down(tmp_path):
         scan.problems = ["эталон: поиск не удался — HTTP 401"]
         return 1, scan
 
-    worker = Worker(db_path=db, scan_runner=down, pause_s=0.01, idle_s=0.01)
+    # concurrency=1: контракт «ровно после N сбоев» проверяем в последовательном
+    # режиме; параллельный успевает взять до concurrency кейсов — на него свой тест.
+    worker = Worker(db_path=db, scan_runner=down, pause_s=0.01, idle_s=0.01,
+                    concurrency=1)
     worker.start()
     for _ in range(80):
         if not worker.state.running:
@@ -355,6 +360,7 @@ def test_case_params_carry_the_case_operator_not_a_default():
     """Воркер навязывал свой оператор каждому кейсу, и кейсы Coral и Sunmar отмечались
     пройденными, хотя искался по ним Pegas. Оператор — измерение кейса, он и решает."""
     case = q.Case(
+        case_key="t|k",
         id=1, operator="Sunmar", departure_city="Москва", country="Турция",
         search_mode="tours", date_from=date(2026, 9, 1), date_to=date(2026, 9, 8),
         nights=7, adults=2, children_ages=[], priority=0, last_checked=None,
@@ -408,3 +414,47 @@ def test_reseeding_the_next_day_retires_nothing(conn):
     assert (seeded, retired) == (1, 0)
     assert q.stats(conn)["total"] == 1
     assert q.list_cases(conn)[0].checks == 1
+
+
+def test_case_carries_its_key_for_history(conn):
+    """Воркер прокидывает ключ кейса в историю возраста; на живом обходе отсутствие
+    этого поля уронило три кейса подряд и остановило круг."""
+    matrix = Matrix(routes=[("Москва", "ОАЭ")], modes=["tours"],
+                    windows=[Window(30)], pax=[Pax()])
+    q.seed_from_matrix(conn, matrix, date(2026, 9, 1))
+    case = q.next_case(conn)
+    assert case.case_key.startswith("tours|Москва|ОАЭ|+30d..")
+
+
+async def test_parallel_worker_covers_the_queue_without_duplicates(tmp_path):
+    """Параллельность — главный множитель скорости круга (цель владельца: до суток).
+    Каждый кейс должен быть проверен ровно один раз: взятые в работу исключаются из
+    выдачи очереди до завершения."""
+    from pegasgap.worker import Worker
+    db = tmp_path / "wp.db"
+    with storage.session(db) as c:
+        for i in range(9):
+            q.add_case(c, departure_city="Москва", country=f"Страна{i}",
+                       search_mode="tours", date_from=date(2026, 9, 1),
+                       date_to=date(2026, 9, 8), nights=7)
+
+    seen: list[int] = []
+
+    async def ok(case):
+        seen.append(case.id)
+        await asyncio.sleep(0.02)
+        return 1, make_scan(gaps=1)
+
+    worker = Worker(db_path=db, scan_runner=ok, pause_s=0.0, idle_s=0.05,
+                    concurrency=4)
+    worker.start()
+    for _ in range(200):
+        with storage.session(db) as c:
+            if q.stats(c)["pending"] == 0:
+                break
+        await _tick()
+    await worker.stop()
+
+    assert sorted(seen) == sorted(set(seen))          # без дублей
+    assert len(seen) == 9                             # вся очередь пройдена
+    assert worker.state.checked == 9

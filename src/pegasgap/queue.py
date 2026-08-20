@@ -57,6 +57,8 @@ class Case:
     """Строка очереди."""
 
     id: int
+    # Ключ кейса — идентичность для истории возраста находок (см. ScanResult.scenario_key).
+    case_key: str
     operator: str
     departure_city: str
     country: str
@@ -136,6 +138,7 @@ def case_key(departure_city: str, country: str, mode: str, date_from: date, date
 def _row_to_case(row: sqlite3.Row) -> Case:
     return Case(
         id=row["id"],
+        case_key=row["case_key"],
         operator=row["operator"],
         departure_city=row["departure_city"],
         country=row["country"],
@@ -184,20 +187,29 @@ def add_case(conn: sqlite3.Connection, *, departure_city: str, country: str,
     return int(row["id"])
 
 
-def next_case(conn: sqlite3.Connection, min_age_hours: float = 0.0) -> Case | None:
+def next_case(conn: sqlite3.Connection, min_age_hours: float = 0.0,
+              exclude_ids: list[int] | None = None) -> Case | None:
     """Следующий кейс: сначала ни разу не проверенные, потом самые давние.
 
     `min_age_hours` защищает от бессмысленного перепрохода: если весь список уже
     проверен час назад, гонять его заново незачем — цены столько не меняются, а квота
     на поиски конечна.
+
+    `exclude_ids` — кейсы, уже взятые в работу: параллельный воркер отмечает кейс
+    проверенным только по завершении, и без исключения раздавал бы один кейс всем
+    свободным рукам сразу.
     """
     cutoff = (datetime.now() - timedelta(hours=min_age_hours)).isoformat(timespec="seconds")
+    exclude = list(exclude_ids or [])
+    # Условие добавляется ТОЛЬКО при непустом списке: `id NOT IN ()` нельзя выразить
+    # как NOT IN (NULL) — сравнение с NULL не истинно ни для чего, и очередь пустела.
+    not_in = f"AND id NOT IN ({','.join('?' * len(exclude))})" if exclude else ""
     row = conn.execute(
-        """SELECT * FROM cases
-            WHERE enabled = 1 AND (last_checked IS NULL OR last_checked <= ?)
+        f"""SELECT * FROM cases
+            WHERE enabled = 1 AND (last_checked IS NULL OR last_checked <= ?) {not_in}
             ORDER BY (last_checked IS NULL) DESC, priority DESC, last_checked ASC
             LIMIT 1""",
-        (cutoff,),
+        (cutoff, *exclude),
     ).fetchone()
     return _row_to_case(row) if row else None
 
@@ -291,10 +303,15 @@ def seed_from_matrix(conn: sqlite3.Connection, matrix,
             # другому — то есть погасить его тут же, следующей строкой.
             today=today,
         )
-    placeholders = ",".join("?" * len(wanted)) or "NULL"
-    cur = conn.execute(
-        f"UPDATE cases SET enabled = 0 WHERE enabled = 1 AND case_key NOT IN ({placeholders})",
-        wanted)
+    # NOT IN () невыразимо через NOT IN (NULL): сравнение с NULL не истинно ни для
+    # чего, и пустой конфиг молча не гасил бы ничего вместо «погасить всё».
+    if wanted:
+        placeholders = ",".join("?" * len(wanted))
+        cur = conn.execute(
+            f"UPDATE cases SET enabled = 0 WHERE enabled = 1 "
+            f"AND case_key NOT IN ({placeholders})", wanted)
+    else:
+        cur = conn.execute("UPDATE cases SET enabled = 0 WHERE enabled = 1")
     return len(wanted), cur.rowcount or 0
 
 
