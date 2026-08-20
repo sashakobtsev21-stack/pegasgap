@@ -105,19 +105,30 @@ def test_different_kinds_are_different_findings():
     assert gap("A", GapKind.HOTEL).key() != gap("A", GapKind.PRICE).key()
 
 
-def test_report_hides_reverse_gaps_from_older_runs(conn):
-    """Прогоны, сделанные до решения об обратных пропусках, лежат в базе как есть —
-    587 строк из 703. Отчёт их не показывает и не считает, но данные остаются:
-    фильтр стоит на чтении, а не удалением строк."""
+def test_report_shows_both_sides(conn):
+    """Витрина больше не эталон, и сторона «нет на Турвизоре» — такая же находка.
+
+    Жёсткое `kind <> 'reverse'` на чтении пережило переход к симметричной модели и
+    продолжало прятать сторону, которую запись уже наполняла: находки лежали в базе и не
+    показывались нигде — даже в списке классов, по которым можно фильтровать."""
     run_id = storage.save_scan(conn, scan([
         gap("A Palace"),
         gap("B Resort", GapKind.REVERSE),
     ]))
     since = datetime.now() - timedelta(days=1)
 
-    assert [r["hotel_name"] for r in storage.findings(conn, since)] == ["A Palace"]
-    assert storage.findings_summary(conn, since)["total"] == 1
+    assert {r["hotel_name"] for r in storage.findings(conn, since)} == {"A Palace", "B Resort"}
+    assert storage.findings_summary(conn, since)["total"] == 2
     assert len(storage.gaps_of_run(conn, run_id)) == 2
+
+
+def test_reverse_side_can_still_be_switched_off(conn, monkeypatch):
+    """Выключатель остаётся: фильтр читается на каждый запрос, а прежние прогоны лежат в
+    базе целиком — решение о показе этой стороны менялось уже дважды."""
+    monkeypatch.setattr("pegasgap.gaps.REPORT_REVERSE", False)
+    storage.save_scan(conn, scan([gap("A Palace"), gap("B Resort", GapKind.REVERSE)]))
+    since = datetime.now() - timedelta(days=1)
+    assert [r["hotel_name"] for r in storage.findings(conn, since)] == ["A Palace"]
 
 
 def test_review_survives_a_recheck(conn):

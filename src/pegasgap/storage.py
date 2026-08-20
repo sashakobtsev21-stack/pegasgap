@@ -328,10 +328,21 @@ def set_reviewed(conn: sqlite3.Connection, gap_id: int, reviewed: bool = True) -
     return bool(cur.rowcount)
 
 
-# Отчёт отвечает на вопрос «чего нет у нас», и обратное направление в нём не участвует
-# (см. gaps.REPORT_REVERSE). Фильтр стоит на ЧТЕНИИ, а не удалением строк: прогоны,
-# сделанные до этого решения, остаются в базе целиком и доступны для разбора запросом.
-_REPORTED_KINDS = "g.kind <> 'reverse'"
+def _reported_kinds() -> str:
+    """Какие классы находок попадают в отчёт.
+
+    Фильтр стоит на ЧТЕНИИ, а не удалением строк: решение о том, показывать ли сторону
+    Турвизора, менялось уже дважды, и каждый раз прежние прогоны должны оставаться в базе
+    целиком. Раньше здесь стояло жёсткое `kind <> 'reverse'` — оно пережило переход к
+    симметричной модели и продолжало прятать сторону, которую запись уже наполняла: 2416
+    находок лежали в базе и не показывались нигде, даже в списке классов.
+
+    Читается на каждый запрос, а не разово при импорте: иначе значение переменной
+    окружения замерзало бы в момент загрузки модуля и тесты не могли бы его подменить.
+    """
+    from pegasgap.gaps import REPORT_REVERSE
+
+    return "1=1" if REPORT_REVERSE else "g.kind <> 'reverse'"
 
 
 # Поля, по которым отчёт можно сузить. Ключ — имя в запросе, значение — колонка.
@@ -388,7 +399,7 @@ def findings(conn: sqlite3.Connection, since: datetime, only_open: bool = False,
               LEFT JOIN gap_history h
                      ON h.scenario_key = r.scenario_key AND h.gap_key = g.gap_key
               LEFT JOIN gap_review v ON v.problem_key = {_PROBLEM_KEY}
-             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_reported_kinds()}
                    AND COALESCE(h.times_seen, 1) >= ?
                    {"AND v.problem_key IS NULL" if only_open else ""}
                    {extra}
@@ -412,7 +423,7 @@ def finding_facets(conn: sqlite3.Connection, since: datetime) -> dict:
         rows = conn.execute(
             f"""SELECT {column} AS v, COUNT(*) AS n
                   FROM gaps g JOIN runs r ON r.id = g.run_id
-                 WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+                 WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_reported_kinds()}
                  GROUP BY 1 ORDER BY n DESC""",
             (since.isoformat(timespec="seconds"),)).fetchall()
         return [str(r["v"]) for r in rows if r["v"]]
@@ -479,7 +490,7 @@ def findings_summary(conn: sqlite3.Connection, since: datetime,
                                   || '|' || g.kind END) AS unique_reviewed
               FROM gaps g JOIN runs r ON r.id = g.run_id
               LEFT JOIN gap_review v ON v.problem_key = {_PROBLEM_KEY}
-             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_REPORTED_KINDS}
+             WHERE r.run_at >= ? AND r.trustworthy = 1 AND {_reported_kinds()}
                    {_where(filters)[0]}""",
         (since.isoformat(timespec="seconds"), *_where(filters)[1]),
     ).fetchone()
