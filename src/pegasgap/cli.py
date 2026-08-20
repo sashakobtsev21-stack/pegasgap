@@ -26,6 +26,7 @@ from pegasgap import storage
 from pegasgap.catalog import fetch_catalog, resolve_country_id
 from pegasgap.diagnosis import diagnose, diagnose_reverse, reverse_index
 from pegasgap.gaps import detect
+from pegasgap.hotelcheck import verify_hotel_gaps
 from pegasgap.linking import load_direction, load_links
 from pegasgap.logging_setup import configure_logging
 from pegasgap.models import PEGAS, GapKind, ScanResult, SearchParams
@@ -119,6 +120,9 @@ async def _diagnose(scan: ScanResult) -> None:
         load_direction, scan.operator, scan.params.departure_city,
         scan.params.destination_country)
     diagnose(scan, catalog, links, direction)
+    # Главный класс находок подтверждается пробой шлюза — после диагностики: пробуются
+    # только уверенно опознанные отели, а опознание даёт она.
+    await verify_hotel_gaps(scan)
     # Причина со стороны самого поиска: справочники объясняют, почему отель
     # НЕ МОГ появиться, а логи — почему его не оказалось при живом поиске.
     for cause in await fetch_causes(scan.checked_request_id):

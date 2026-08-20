@@ -288,6 +288,69 @@ def split_load_state(states: list[dict]) -> tuple[list[Offer], list[str], list[s
     return priced, no_tours, not_responding
 
 
+# Сколько наших id отелей уходит в одну прижатую пробу шлюза. Двадцать держит выдачу
+# в пределах пары страниц даже на отелях с сотней строк каждая.
+PROBE_CHUNK = int(os.environ.get("PEGASGAP_SLETAT_PROBE_CHUNK") or 20)
+
+
+async def probe_hotels_with_tours(params: SearchParams,
+                                  catalog_ids: list[int]) -> set[int] | None:
+    """У каких из НАШИХ отелей прижатый поиск шлюза находит туры на эти параметры.
+
+    Зеркало верификации обратной стороны: «отеля нет в выдаче» само по себе не
+    доказательство — на обратной стороне так вскрылись 37% фантомов. Параметр `hotels=`
+    шлюза принимает список id и фильтрует точно (контрольная проба: два живых отеля
+    вернулись, неслинкованный — нет).
+
+    None — проба не состоялась: вызывающий не делает никаких выводов. Пустое множество —
+    утверждение «туров нет ни у кого из списка».
+    """
+    if not catalog_ids:
+        return set()
+    provider = SletatApiProvider()
+    operator = params.operators[0] if params.operators else ""
+    proxy = pool().acquire()
+    found: set[int] = set()
+    try:
+        async with httpx.AsyncClient(timeout=90, headers={"Referer": REFERER},
+                                     proxy=proxy.url if proxy else None) as client:
+            city_id = await provider._resolve_city(client, params.departure_city)
+            country_id = await provider._resolve_country(
+                client, city_id, params.destination_country)
+            operator_id, state = await provider._resolve_operator(
+                client, country_id, operator)
+            if state in ("disabled", "missing"):
+                return set()
+            for i in range(0, len(catalog_ids), PROBE_CHUNK):
+                chunk = catalog_ids[i:i + PROBE_CHUNK]
+                base = provider._query(params, city_id, country_id, operator_id)
+                base["hotels"] = ",".join(str(h) for h in chunk)
+                data = await provider._call(client, "GetTours", **base, requestId=0)
+                request_id = _to_int(data.get("requestId"))
+                if not request_id:
+                    return None
+                await provider._await_completion(client, request_id)
+                page = 1
+                while page <= 3 and len(found & set(chunk)) < len(chunk):
+                    body = await provider._call(
+                        client, "GetTours", **base, requestId=request_id,
+                        updateResult=1, pageNumber=page)
+                    rows = body.get("aaData") or []
+                    for row in rows:
+                        if isinstance(row, list) and len(row) > IDX_HOTEL_ID:
+                            hid = _to_int(row[IDX_HOTEL_ID])
+                            if hid is not None:
+                                found.add(hid)
+                    if len(rows) < PAGE_SIZE:
+                        break
+                    page += 1
+    except Exception as exc:
+        log.warning("прижатая проба шлюза не состоялась (%s) — находки без верификации",
+                    type(exc).__name__)
+        return None
+    return found & set(catalog_ids)
+
+
 @register_provider("sletat_api")
 class SletatApiProvider:
     """Поиск на Слетать через JSON-шлюз."""

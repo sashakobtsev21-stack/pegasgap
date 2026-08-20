@@ -154,3 +154,33 @@ def test_garbage_blocks_do_not_crash_the_builder():
     assert tourvisor_api.build_hotel_offers(blocks, {}, None) == []
     assert tourvisor_api._hotel_codes(blocks) == {5, 6}
     assert tourvisor_api.offer_facts(blocks) == []
+
+
+async def test_single_stall_is_retried_before_believing_the_end(monkeypatch):
+    """Под нагрузкой витрина изредка отдаёт ту же страницу повторно, и один пустой
+    прирост — ещё не конец: живой прогон так объявил полным листинг из 16 отелей при
+    ~66 реальных. Конец подтверждается вторым пустым приростом подряд."""
+    provider = tourvisor_api.TourvisorApiProvider()
+
+    def page(ids):
+        return [{"operator": 12, "hotel": [{"id": i, "price": 100} for i in ids]}]
+
+    feed = iter([
+        (page([1, 2]), True),          # первая страница
+        (page([1, 2]), True),          # заикание — та же
+        (page([1, 2, 3]), True),       # повтор принёс продолжение
+        (page([1, 2, 3]), True),       # пусто раз
+        (page([1, 2, 3]), True),       # пусто два — теперь конец
+    ])
+
+    async def fake_await(self, client, request_id, referrer):
+        return next(feed)
+
+    async def fake_get(self, client, url, referrer=None, **query):
+        return {"result": {"requestid": 777}}
+
+    monkeypatch.setattr(tourvisor_api.TourvisorApiProvider, "_await_result", fake_await)
+    monkeypatch.setattr(tourvisor_api.TourvisorApiProvider, "_get", fake_get)
+    blocks, finished, complete = await provider._collect_pages(None, 1, "ref")
+    assert finished and complete
+    assert tourvisor_api._hotel_codes(blocks) == {1, 2, 3}

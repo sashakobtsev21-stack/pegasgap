@@ -611,6 +611,7 @@ class TourvisorApiProvider:
         # пагинация хоть раз сработала. Если она не сдвинулась ни разу, мы видели ровно
         # одну страницу — и полной её можно считать лишь пока она не упёрлась в предел.
         advanced = False
+        stalls = 0
         for _ in range(MAX_PAGES - 1):
             body = await self._get(client, SEARCH_URL, referrer=referrer,
                                    nextpage=1, requestid=request_id)
@@ -632,7 +633,16 @@ class TourvisorApiProvider:
                             len(seen - codes))
                 return blocks, True, False
             if not codes - seen:
-                return blocks, True, _page_is_whole(advanced, seen)
+                # Прирост иссяк — но под нагрузкой витрина изредка отдаёт ту же страницу
+                # повторно («заикание»), и одно совпадение ещё не конец: живой прогон
+                # так объявил полным листинг из 16 отелей при ~66 реальных. Верим концу
+                # только со второго подряд пустого прироста; цена — одна лишняя страница
+                # на поиск.
+                stalls += 1
+                if stalls >= 2:
+                    return blocks, True, _page_is_whole(advanced, seen)
+                continue
+            stalls = 0
             advanced = True
             seen |= codes
             blocks = page_blocks
