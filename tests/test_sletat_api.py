@@ -212,7 +212,8 @@ def test_unfinished_search_is_reported_as_truncated():
     import inspect
 
     from pegasgap.providers.sletat_api import SletatApiProvider
-    src = inspect.getsource(SletatApiProvider.search)
+    # Тело поиска живёт в _search_gated: публичный search — обёртка-ворота.
+    src = inspect.getsource(SletatApiProvider._search_gated)
     assert "states, finished = await self._await_completion" in src
     assert "truncated = capped or not finished" in src
 

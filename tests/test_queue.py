@@ -304,6 +304,28 @@ async def test_worker_stops_when_the_platform_is_down(tmp_path):
         assert q.stats(c)["pending"] >= 5        # непроверенные остались непроверенными
 
 
+def test_failure_threshold_scales_with_concurrency(monkeypatch):
+    """При параллельности серия сбоев набирается одной пачкой: три тяжёлых кейса одного
+    направления (живой случай — «Москва—Россия, отели») падают разом, и порог 3 остановил
+    обход при живых площадках. Порог обязан расти вместе с параллельностью."""
+    import importlib
+
+    import pegasgap.worker as w
+
+    monkeypatch.delenv("PEGASGAP_MAX_FAILURES", raising=False)
+    monkeypatch.setenv("PEGASGAP_WORKER_CONCURRENCY", "6")
+    assert importlib.reload(w).MAX_CONSECUTIVE_FAILURES == 8   # пачка + 2
+    monkeypatch.setenv("PEGASGAP_WORKER_CONCURRENCY", "1")
+    assert importlib.reload(w).MAX_CONSECUTIVE_FAILURES == 3   # последовательный минимум
+    monkeypatch.setenv("PEGASGAP_MAX_FAILURES", "5")
+    assert importlib.reload(w).MAX_CONSECUTIVE_FAILURES == 5   # явная настройка сильнее
+    # Вернуть модуль в честное состояние для остальных тестов: monkeypatch откатит
+    # окружение, но перезагрузить модуль за нас не сможет.
+    monkeypatch.delenv("PEGASGAP_MAX_FAILURES", raising=False)
+    monkeypatch.delenv("PEGASGAP_WORKER_CONCURRENCY", raising=False)
+    importlib.reload(w)
+
+
 async def test_untrustworthy_data_does_not_stop_the_worker(tmp_path):
     """Сомнительные данные — свойство направления, а не площадки: следующее может быть
     в порядке, и останавливаться из-за этого нельзя."""

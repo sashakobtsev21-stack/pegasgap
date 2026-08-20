@@ -85,10 +85,20 @@ PAGE_SIZE = int(os.environ.get("PEGASGAP_API_PAGE_SIZE") or 1000)
 # Предохранитель от бесконечной пагинации. У крупного оператора на популярном направлении
 # бывает под десять тысяч строк, поэтому запас нужен ощутимый; о его срабатывании
 # вызывающий код узнаёт через `truncated` — молча обрезанная выдача породила бы пропуски.
-MAX_PAGES = int(os.environ.get("PEGASGAP_API_MAX_PAGES") or 15)
+# 15 страниц не хватало России: внутренние туры дают 400+ отелей, и прогоны стабильно
+# выходили «не целиком». 25 страниц (25 тыс. строк) закрывают и её; страница читается
+# за секунды, так что запас почти ничего не стоит.
+MAX_PAGES = int(os.environ.get("PEGASGAP_API_MAX_PAGES") or 25)
 
 POLL_INTERVAL_S = 1.5   # рекомендация документации шлюза
 POLL_TIMEOUT_S = float(os.environ.get("PEGASGAP_API_POLL_TIMEOUT_S") or 120)
+
+# Предел одновременных ТЯЖЁЛЫХ операций на шлюз из этого процесса: поиск и пачка
+# прижатых проб. Зеркало ворот Турвизора и по той же причине: в пачке из шести
+# параллельных кейсов чужие пробы занимали шлюз, и свежий поиск (в одиночку — 10
+# секунд даже на России с её 800+ отелями) не пробивался за 420.
+PARALLEL_HEAVY = int(os.environ.get("PEGASGAP_SLETAT_PARALLEL") or 3)
+_heavy_gate = asyncio.Semaphore(PARALLEL_HEAVY)
 
 # Город вылета по умолчанию — для CLI и для режима «без перелёта», где город не значит
 # ничего. Ограничением он больше не является.
@@ -307,6 +317,13 @@ async def probe_hotels_with_tours(params: SearchParams,
     """
     if not catalog_ids:
         return set()
+    # Тяжёлая операция — под воротами: см. _heavy_gate.
+    async with _heavy_gate:
+        return await _probe_gated(params, catalog_ids)
+
+
+async def _probe_gated(params: SearchParams,
+                       catalog_ids: list[int]) -> set[int] | None:
     provider = SletatApiProvider()
     operator = params.operators[0] if params.operators else ""
     proxy = pool().acquire()
@@ -367,6 +384,11 @@ class SletatApiProvider:
         self.on_frame = None
 
     async def search(self, params: SearchParams) -> ProviderResult:
+        # Тяжёлая операция — под воротами: см. _heavy_gate.
+        async with _heavy_gate:
+            return await self._search_gated(params)
+
+    async def _search_gated(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
         # Один прокси на весь поиск: шлюз держит результат за requestId, и опрос

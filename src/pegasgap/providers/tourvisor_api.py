@@ -78,6 +78,15 @@ ACTUALIZE_URL = "https://tourvisor.ru/xml/actualize.php"
 # молчать обратную сторону почти на каждом направлении.
 MAX_PAGES = int(os.environ.get("PEGASGAP_TOURVISOR_PAGES") or 60)
 
+# Предел одновременных ТЯЖЁЛЫХ операций на витрину из этого процесса: поиск и пачка
+# прижатых проб. Без предела параллельный обход душит витрину сам: живой замер — кейс
+# «Москва—Россия, отели» в одиночку читается за 7 секунд, а в пачке из шести его поиск
+# не пробился и за 420 — полосу заняли пробы соседних кейсов, и обход остановил себя.
+# Три слота выравнивают нагрузку; кейсы всё равно перекрываются другими фазами
+# (шлюз Слетать, SQL-диагностика, Кибана), так что параллельность не пропадает.
+PARALLEL_HEAVY = int(os.environ.get("PEGASGAP_TOURVISOR_PARALLEL") or 3)
+_heavy_gate = asyncio.Semaphore(PARALLEL_HEAVY)
+
 # Оба эндпоинта требуют реферер — и заголовком, и параметром запроса. Без него ответ
 # приходит пустым; это часть контракта, а не обход защиты.
 REFERER = "https://tourvisor.ru/"
@@ -368,6 +377,11 @@ class TourvisorApiProvider:
         self.on_frame = None
 
     async def search(self, params: SearchParams) -> ProviderResult:
+        # Тяжёлая операция — под воротами: см. _heavy_gate.
+        async with _heavy_gate:
+            return await self._search_gated(params)
+
+    async def _search_gated(self, params: SearchParams) -> ProviderResult:
         start = time.monotonic()
         operator = params.operators[0] if params.operators else ""
         # Прокси берётся ОДИН на весь поиск: постраничный сбор ходит по одному requestid,
@@ -711,6 +725,12 @@ async def probe_hotels_with_tours(params: SearchParams,
     """
     if not hotel_ids:
         return set()
+    # Тяжёлая операция — под воротами: см. _heavy_gate.
+    async with _heavy_gate:
+        return await _probe_gated(params, hotel_ids)
+
+
+async def _probe_gated(params: SearchParams, hotel_ids: list[int]) -> set[int] | None:
     provider = TourvisorApiProvider()
     proxy = pool().acquire()
     found: set[int] = set()
