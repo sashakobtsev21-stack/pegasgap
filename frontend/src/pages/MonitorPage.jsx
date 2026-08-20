@@ -255,7 +255,7 @@ export default function MonitorPage() {
                   <th className="py-2 pr-3 font-semibold">Направление и даты</th>
                   <th className="py-2 pr-3 font-semibold">Туристы</th>
                   <th className="py-2 pr-3 font-semibold">Класс</th>
-                  <th className="py-2 pr-3 font-semibold">Отель</th>
+                  <th className="min-w-[240px] py-2 pr-3 font-semibold">Отель</th>
                   <th className="py-2 pr-3 font-semibold">Причина</th>
                   <th className="py-2 font-semibold">Цены</th>
                 </tr>
@@ -326,7 +326,9 @@ export default function MonitorPage() {
                           </div>
                         )}
                       </td>
-                      <td className="py-2 pr-3 text-ink">
+                      {/* Ширина зафиксирована: без неё длинные имена с (EX. …)
+                          ломались в столбик по слову и колонка выглядела смятой. */}
+                      <td className="min-w-[240px] py-2 pr-3 text-ink">
                         <div>{g.head.hotel_name}{g.head.stars ? ` ${g.head.stars}*` : ""}</div>
                         {/* Ссылка на тот же поиск: без неё находка проверяется только
                             повторением поиска руками по десятку полей формы. */}
