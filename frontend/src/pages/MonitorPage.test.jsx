@@ -79,12 +79,12 @@ describe("MonitorPage", () => {
     expect(screen.getByText(/10 ноч\./)).toBeTruthy();
   });
 
-  it("предупреждает, когда сравниваются разные заезды", async () => {
+  it("показывает заезд, на котором сравнивались цены", async () => {
     response = payload([finding({
-      reference_checkin: "2026-09-19", checked_checkin: "2026-09-26",
+      reference_checkin: "2026-09-19", checked_checkin: "2026-09-19",
     })]);
     render(<MonitorPage />);
-    expect(await screen.findByText(/сравниваются разные заезды/)).toBeTruthy();
+    expect(await screen.findByText(/заезд 19\.09\.2026/)).toBeTruthy();
   });
 
   it("называет Турвизор, когда дороже он", async () => {

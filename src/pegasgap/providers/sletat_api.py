@@ -243,7 +243,16 @@ def build_hotel_offers(rows: list[list], operator: str) -> list[HotelOffer]:
         )
         seen = best.get(name)
         if seen is None or offer.price < seen.price:
+            offer.prices_by_date = seen.prices_by_date if seen else {}
             best[name] = offer
+            seen = offer
+        # Цена по каждому заезду копится независимо от того, чьё предложение стало
+        # минимумом: сравнивать площадки надо на одну дату, а не на два разных минимума.
+        day = offer.checkin
+        if day is not None:
+            known = seen.prices_by_date.get(day)
+            if known is None or offer.price < known:
+                seen.prices_by_date[day] = offer.price
     return sorted(best.values(), key=lambda h: h.price)
 
 

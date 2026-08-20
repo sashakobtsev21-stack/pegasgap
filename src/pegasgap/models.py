@@ -164,6 +164,10 @@ class HotelOffer(BaseModel):
     checkin: date | None = None
     meal: str | None = None
     room: str | None = None
+    # Минимальная цена по каждому заезду окна. Нужна, чтобы сравнивать цены площадок на
+    # ОДНУ дату: минимум по всему окну каждая площадка выбирает сама, и он сплошь и рядом
+    # приходится на разные дни — тогда «дороже на 9%» это разница дат, а не площадок.
+    prices_by_date: dict[date, Decimal] = Field(default_factory=dict)
 
     @property
     def label(self) -> str:

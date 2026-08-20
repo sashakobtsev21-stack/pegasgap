@@ -242,11 +242,30 @@ def build_hotel_offers(blocks: list[dict], hotels: dict[int, dict],
                 # 16%», но не видно, что минимумы площадок пришлись на разные даты, — а
                 # это первое объяснение расхождения, которое надо исключить.
                 checkin=_cheapest_checkin(row),
+                prices_by_date=_prices_by_date(row),
             )
             seen = best.get(name)
             if seen is None or offer.price < seen.price:
                 best[name] = offer
     return sorted(best.values(), key=lambda h: h.price)
+
+
+def _prices_by_date(row: dict) -> dict[date, Decimal]:
+    """Минимальная цена отеля по каждому заезду.
+
+    Витрина кладёт в отель список туров, у каждого своя дата (`dt`) и цена (`pr`). Разрез
+    по датам нужен, чтобы сравнивать площадки на ОДНУ дату: минимум по всему окну каждая
+    сторона выбирает сама, и он сплошь и рядом приходится на разные дни.
+    """
+    out: dict[date, Decimal] = {}
+    for tour in row.get("tour") or []:
+        price, day = _to_decimal(tour.get("pr")), _parse_day(tour.get("dt"))
+        if price is None or day is None or price <= 0:
+            continue
+        known = out.get(day)
+        if known is None or price < known:
+            out[day] = price
+    return out
 
 
 def _cheapest_checkin(row: dict) -> date | None:

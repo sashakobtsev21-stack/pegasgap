@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import statistics
+from datetime import date
+from decimal import Decimal
 
 from pegasgap.matching import MatchResult, match_hotels
 from pegasgap.models import (
@@ -254,8 +256,31 @@ def _as_int(value: str | None) -> int | None:
         return None
 
 
+def _same_day_prices(m) -> tuple[date, Decimal, Decimal] | None:
+    """Заезд, на котором цены сравнимы, и обе цены на него. None — сравнивать нечего.
+
+    Раньше сравнивались два минимума по окну, взятые сторонами независимо. Они сплошь и
+    рядом приходятся на разные дни: живой отчёт показывал «на Слетать дороже на 9.9%» при
+    заездах 06.09 у нас и 08.09 у витрины — то есть измерялась разница дат, а не площадок.
+    Предупреждение об этом стояло почти на каждой строке, что и означало: сравнение
+    негодное, а не требующее оговорки.
+
+    Берём самый дешёвый ОБЩИЙ заезд по стороне витрины: это предложение, которое человек
+    увидит первым, открыв обе ссылки, и по нему расхождение проверяется глазами.
+    """
+    common = set(m.reference.prices_by_date) & set(m.checked.prices_by_date)
+    if not common:
+        return None
+    day = min(common, key=lambda d: m.reference.prices_by_date[d])
+    return day, m.reference.prices_by_date[day], m.checked.prices_by_date[day]
+
+
 def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap], float | None]:
     """Отели, чья цена выбивается из обычного для этого прогона расхождения.
+
+    Сравнение идёт ТОЛЬКО по общему заезду (см. `_same_day_prices`). Пара без общей даты
+    из расчёта выпадает целиком — и из полосы «обычного», и из находок: сравнить её
+    честно нельзя, а сравнить нечестно хуже, чем промолчать.
 
     Полоса «нормального» строится по самим данным: медиана расхождений задаёт центр,
     медианное абсолютное отклонение — ширину. Иначе на широком разбросе (а он широкий:
@@ -263,10 +288,8 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
     совпадением цены — формально они дальше всех от медианы, а по сути ничем не
     примечательны.
     """
-    diffs = [
-        float((m.checked.price - m.reference.price) / m.reference.price * 100)
-        for m in match.pairs if m.reference.price
-    ]
+    comparable = [(m, same) for m in match.pairs if (same := _same_day_prices(m))]
+    diffs = [float((chk - ref) / ref * 100) for _, (_, ref, chk) in comparable if ref]
     if not diffs:
         return [], None
     offset = statistics.median(diffs)
@@ -284,10 +307,10 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
         band = max(tolerance_pct, MAD_MULTIPLIER * mad)
 
     out: list[HotelGap] = []
-    for m in match.pairs:
-        if not m.reference.price:
+    for m, (day, ref_price, chk_price) in comparable:
+        if not ref_price:
             continue
-        diff = float((m.checked.price - m.reference.price) / m.reference.price * 100)
+        diff = float((chk_price - ref_price) / ref_price * 100)
         deviation = diff - offset
         if abs(deviation) <= band:
             continue
@@ -296,8 +319,8 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             hotel_name=m.reference.hotel_name,
             stars=m.reference.stars or m.checked.stars,
             resort=m.reference.destination,
-            reference_price=m.reference.price,
-            checked_price=m.checked.price,
+            reference_price=ref_price,
+            checked_price=chk_price,
             currency=m.reference.currency,
             matched_name=m.checked.hotel_name,
             # Идентификатор отеля в нашем каталоге приходит в самой выдаче. Он нужен
@@ -305,8 +328,9 @@ def _price_gaps(match: MatchResult, tolerance_pct: float) -> tuple[list[HotelGap
             # его проставляет диагностика, а здесь отель у нас есть — берём как есть.
             reference_hotel_id=_as_int(m.reference.raw_label),
             catalog_id=_as_int(m.checked.raw_label),
-            reference_checkin=m.reference.checkin,
-            checked_checkin=m.checked.checkin,
+            # Обе даты — один и тот же заезд: сравнение по определению одинодневное.
+            reference_checkin=day,
+            checked_checkin=day,
             checked_meal=m.checked.meal,
             checked_room=m.checked.room,
             note=(f"разница {diff:+.1f}% при обычной для прогона {offset:+.1f}% "

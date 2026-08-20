@@ -425,36 +425,33 @@ function Prices({ f }) {
           {diff.toFixed(1)}%)
         </div>
       )}
-      {/* На какие заезды пришлись сравниваемые цены. Минимум по окну каждая площадка
-          выбирает сама, и даты легко расходятся: тогда «дороже на 16%» — это разница
-          дат, а не площадок. Первое, что нужно исключить, глядя на расхождение. */}
-      <Checkins f={f} />
-    </div>
-  );
-}
-
-/** Заезды обеих сторон. Совпали — одна строка; разошлись — предупреждение. */
-function Checkins({ f }) {
-  const ours = f.checked_checkin;
-  const theirs = f.reference_checkin;
-  if (!ours && !theirs) return null;
-  const extras = [f.checked_meal, f.checked_room].filter(Boolean).join(" · ");
-  const apart = ours && theirs && ours !== theirs;
-  return (
-    <div className={`mt-0.5 text-[11px] ${apart ? "text-amber-300/80" : "text-muted"}`}>
-      {apart
-        ? `сравниваются разные заезды: Слетать ${formatDate(ours)}, Турвизор ${formatDate(theirs)}`
-        : `заезд ${formatDate(ours || theirs)}`}
-      {extras ? ` · ${extras}` : ""}
+      {/* Заезд, на котором сравнивались цены. Он один на обе стороны — иначе измерялась
+          бы разница дат, а не площадок. */}
+      <Checkin f={f} />
     </div>
   );
 }
 
 /**
- * Направление находки. В режиме «отели» города вылета НЕТ: витрина ищет проживание без
- * перелёта, и город в запросе не участвует. Показывать «Москва → Турция» там, где вылета
- * не было, — значит звать разбираться не туда.
+ * На какой заезд сравнивались цены. Он ОДИН на обе стороны: сравнение по разным датам
+ * мерило бы разницу дат, а не площадок, поэтому пары без общего заезда в находки не
+ * попадают вовсе.
+ *
+ * Питание и номер — с нашей стороны и совпадения не гарантируют: одинаковая дата ещё не
+ * значит одинаковый номер. Поэтому они идут справочно, а не как часть утверждения.
  */
+function Checkin({ f }) {
+  const day = f.checked_checkin || f.reference_checkin;
+  if (!day) return null;
+  const extras = [f.checked_meal, f.checked_room].filter(Boolean).join(" · ");
+  return (
+    <div className="mt-0.5 text-[11px] text-muted">
+      заезд {formatDate(day)}
+      {extras ? ` · у нас ${extras}` : ""}
+    </div>
+  );
+}
+
 const routeLabel = (f) =>
   (f.search_mode === "hotels" || f.params?.search_mode === "hotels")
     ? `${f.country} · без перелёта`

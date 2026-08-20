@@ -26,8 +26,17 @@ PARAMS = SearchParams(
 )
 
 
-def hotel(name: str, price: str, provider: str, stars: int | None = None) -> HotelOffer:
-    return HotelOffer(provider=provider, hotel_name=name, price=Decimal(price), stars=stars)
+# Общий заезд по умолчанию. Цены сравниваются ТОЛЬКО на одну дату, поэтому предложение
+# без разреза по заездам сравнивать не с чем — как и в жизни.
+CHECKIN = date(2026, 9, 12)
+
+
+def hotel(name: str, price: str, provider: str, stars: int | None = None,
+          checkin: date | None = CHECKIN) -> HotelOffer:
+    return HotelOffer(
+        provider=provider, hotel_name=name, price=Decimal(price), stars=stars,
+        checkin=checkin,
+        prices_by_date={checkin: Decimal(price)} if checkin else {})
 
 
 def result(provider: str, hotels: list[HotelOffer] | None = None, **kw) -> ProviderResult:
@@ -460,3 +469,35 @@ def test_reference_link_survives_an_early_exit():
     ref.search_url = "https://tourvisor.ru/tours/turkey/moskva?ts_dosearch=1"
     scan = detect(PARAMS, ref, result("sletat", [hotel("A", "1", "sletat")]))
     assert scan.reference_url == ref.search_url
+
+
+# --- Цены сравниваются по одному заезду ---------------------------------------------
+
+def test_prices_are_compared_on_a_shared_check_in():
+    """Раньше сравнивались два минимума по окну, взятые сторонами независимо. Они сплошь
+    и рядом приходятся на разные дни: отчёт показывал «на Слетать дороже на 9.9%» при
+    заездах 06.09 у нас и 08.09 у витрины — то есть мерил разницу дат, а не площадок."""
+    day, other = date(2026, 9, 6), date(2026, 9, 8)
+    ref, chk = [], []
+    for i in range(4):
+        r = hotel(f"H{i}", "100000", "tourvisor", checkin=None)
+        r.prices_by_date = {day: Decimal("100000"), other: Decimal("90000")}
+        c = hotel(f"H{i}", "110000", "sletat", checkin=None)
+        # Наш минимум лежит на ДРУГОЙ дате, чем минимум витрины.
+        c.prices_by_date = {day: Decimal("101000"), other: Decimal("110000")}
+        ref.append(r)
+        chk.append(c)
+    scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
+    # Общий самый дешёвый у витрины заезд — 08.09; на нём расхождение +22%, а не разница дат.
+    assert scan.price_offset_pct == 22.22
+    for gap in scan.gaps_of(GapKind.PRICE):
+        assert gap.reference_checkin == gap.checked_checkin
+
+
+def test_no_shared_check_in_means_no_price_finding():
+    """Сравнить нечестно хуже, чем промолчать."""
+    ref = [hotel(f"H{i}", "100000", "tourvisor", checkin=date(2026, 9, 6)) for i in range(4)]
+    chk = [hotel(f"H{i}", "130000", "sletat", checkin=date(2026, 9, 20)) for i in range(4)]
+    scan = detect(PARAMS, result("tourvisor", ref), result("sletat", chk))
+    assert scan.gaps_of(GapKind.PRICE) == []
+    assert scan.price_offset_pct is None
