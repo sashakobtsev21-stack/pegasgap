@@ -212,3 +212,16 @@ def test_unknown_operator_is_refused_not_silently_swapped(client):
     })
     assert r.status_code == 400
     assert "не в списке" in r.json()["detail"]
+
+
+def test_every_db_backed_endpoint_answers_on_an_empty_base(tmp_path):
+    """И3 плана: свежая пустая база не должна ронять ни один эндпоинт — «нет данных»
+    это ответ, а не исключение. Сетевые эндпоинты (refdata, scan) сюда не входят."""
+    app = create_app(tmp_path / "empty.db")
+    client = TestClient(app)
+    for path in ("/healthz", "/api/queue", "/api/findings", "/api/worker",
+                 "/api/proxies", "/api/history", "/api/sweep", "/api/sweep/matrix"):
+        response = client.get(path)
+        assert response.status_code == 200, f"{path}: {response.status_code}"
+        assert response.json() is not None, path
+    assert client.get("/api/runs/9999").status_code == 404
